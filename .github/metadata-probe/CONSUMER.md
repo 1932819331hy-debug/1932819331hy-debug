@@ -21,6 +21,10 @@ chain, failed source or stale snapshot is a coverage gap, not an empty queue.
 Ignore `LEGACY_UNVERIFIED`, `BASELINE_UNTRIAGED` and
 `FIRST_OBSERVED_UNVERIFIED` for automatic engineering. `VALIDATION_REQUIRED`
 means a meaningful observed delta needs verification; it is not a READY ticket.
+A first sight can also require validation when a funded/bounty listing has an
+authoritative creation time after its established representation baseline and
+before the current observation. Old, missing and future creation times do not
+qualify. This does not establish payment eligibility or authorize engineering.
 Compare event IDs with the canonical Page's processing records. Verify the
 original source, current task, eligibility, amount, policy and acceptance before
 creating/updating a ticket. Deep-check at most two new candidates per pass.

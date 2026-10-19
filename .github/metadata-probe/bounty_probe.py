@@ -140,6 +140,26 @@ def retry_delay(headers,start,interval,failures):
     if reset.isdigit() and headers.get('x-ratelimit-remaining')=='0': delay=max(delay,min(86400,int(reset)-start))
     return delay
 
+def fresh_candidate(source,snapshot,cached,start):
+    """A verified creation time can distinguish a new funded listing from an old first sight."""
+    if not cached or 'last_success' not in cached: return False
+    stamp=snapshot.get('created_at')
+    try:
+        if type(stamp) in (int,float): created=float(stamp)
+        elif isinstance(stamp,str):
+            parsed=datetime.datetime.fromisoformat(stamp.replace('Z','+00:00'))
+            if parsed.tzinfo is None: return False
+            created=parsed.timestamp()
+        else: return False
+        if not cached['last_success']<created<=start: return False
+    except (ValueError,TypeError,OverflowError): return False
+    if source['kind']=='squash':
+        return (snapshot.get('state')=='funded' and type(snapshot.get('amount_minor')) is int
+                and snapshot['amount_minor']>0 and isinstance(snapshot.get('currency'),str)
+                and bool(snapshot['currency'].strip())
+                and (snapshot.get('internal') is False or snapshot.get('internal') is None))
+    return snapshot.get('state')=='open' and bool(snapshot.get('funding_labels'))
+
 def run(db,manifest,trigger,now=None,transport=fetch):
     start=time.time() if now is None else now
     Path(db).parent.mkdir(parents=True,exist_ok=True)
@@ -213,7 +233,8 @@ def run(db,manifest,trigger,now=None,transport=fetch):
                         kind=None
                         if emit:
                             revision=(old[2] or 0)+1 if old else 1
-                            kind='BASELINE_UNTRIAGED' if baseline or (old and old[3]!=spec) else 'FIRST_OBSERVED_UNVERIFIED' if before is None else 'VALIDATION_REQUIRED'
+                            newly_created=before is None and fresh_candidate(source,snapshot,cached,start)
+                            kind='BASELINE_UNTRIAGED' if baseline or (old and old[3]!=spec) else 'FIRST_OBSERVED_UNVERIFIED' if before is None and not newly_created else 'VALIDATION_REQUIRED'
                             event_id=digest([2,source['id'],identity,revision,old[0] if old else None,fingerprint])
                             diff={key:{'before':before.get(key) if before else None,'after':value} for key,value in meaningful.items() if before is None or before.get(key)!=value}
                             payload={'schema_version':2,'source':source['id'],'source_id':source['id'],'canonical_id':identity,'task_id':identity,
@@ -223,6 +244,7 @@ def run(db,manifest,trigger,now=None,transport=fetch):
                                      'squash_id':snapshot.get('squash_id'),'source_event_ids':snapshot['source_event_ids'],
                                      'evidence':{'representation_url':chosen['url'],'query_spec_digest':spec,'partition':partition_index,'page':page,
                                                  'response_sha256':hashlib.sha256(body).hexdigest(),'observed_at':utc(start),'prior_observation_available':before is not None,
+                                                 'fresh_creation_after_baseline':newly_created,
                                                  'presence_reason':'ABSENT_FROM_COMPLETE_SOURCE_LISTING_UNVERIFIED' if snapshot.get('source_present') is False else 'PRESENT_IN_SUCCESSFUL_SOURCE_RESPONSE'},
                                      'revision':revision,'builder':'UNKNOWN','publisher':'UNKNOWN','dispatch_allowed':False,'publish_allowed':False,'model_calls':0,
                                      'authority':'CANONICAL_PAGE_ONLY','cash_opportunity_verified':False}

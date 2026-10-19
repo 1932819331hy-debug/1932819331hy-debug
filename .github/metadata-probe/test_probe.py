@@ -3,6 +3,31 @@ import copy,importlib.util,json,sqlite3,tempfile,unittest
 from pathlib import Path
 SPEC=importlib.util.spec_from_file_location('probe',Path(__file__).with_name('bounty_probe.py'))
 class ProbeTests(unittest.TestCase):
+ def test_new_funded_task_created_after_baseline_requires_validation(self):
+  self.run_probe(self.response([self.job()]),now=1000)
+  fresh=dict(self.job(),spec_id='gh_1_3',repo_url='https://github.com/x/y/issues/3',created_ts=1200)
+  r=self.run_probe(self.response([self.job(),fresh]),now=1601)
+  self.assertEqual(r['meaningful_events'],1)
+  self.assertEqual(r['first_observed_unverified_events'],0)
+  with self.p.sqlite3.connect(self.db) as c:
+   e=json.loads(c.execute('SELECT payload FROM events ORDER BY observed DESC LIMIT 1').fetchone()[0])
+  self.assertTrue(e['evidence']['fresh_creation_after_baseline'])
+  self.assertFalse(e['dispatch_allowed'])
+  self.assertFalse(e['cash_opportunity_verified'])
+ def test_future_created_task_does_not_consume_validation_budget(self):
+  self.run_probe(self.response([self.job()]),now=1000)
+  future=dict(self.job(),spec_id='gh_1_3',repo_url='https://github.com/x/y/issues/3',created_ts=99999)
+  r=self.run_probe(self.response([self.job(),future]),now=1601)
+  self.assertEqual(r['meaningful_events'],0)
+  self.assertEqual(r['first_observed_unverified_events'],1)
+ def test_malformed_funding_metadata_does_not_consume_validation_budget(self):
+  self.run_probe(self.response([self.job()]),now=1000)
+  fresh=dict(self.job(),spec_id='gh_1_3',repo_url='https://github.com/x/y/issues/3',created_ts=1200,internal=1)
+  r=self.run_probe(self.response([self.job(),fresh]),now=1601)
+  self.assertEqual(r['meaningful_events'],0)
+  other=dict(self.job(),spec_id='gh_1_4',repo_url='https://github.com/x/y/issues/4',created_ts=1800,currency={'code':'USD'})
+  r=self.run_probe(self.response([self.job(),fresh,other]),now=2202)
+  self.assertEqual(r['meaningful_events'],0)
  def setUp(self):
   self.assertTrue(Path(SPEC.origin).exists(),'probe implementation has not been created')
   self.p=importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(self.p)
