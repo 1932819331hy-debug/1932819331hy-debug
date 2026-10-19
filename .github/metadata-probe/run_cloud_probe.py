@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import sqlite3
+import review_metadata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -33,9 +34,10 @@ with sqlite3.connect(state / "cache.db") as connection:
             "SELECT id,payload,observed FROM events ORDER BY observed DESC,id LIMIT 200"
         )
     ]
-output = {"receipt": receipt, "derived_events": events, "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
+reviews = review_metadata.run(state)
+output = {"receipt": receipt, "derived_events": events, "reviews": reviews, "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
 (state / "latest.json").write_text(json.dumps(output, sort_keys=True) + "\n")
 print("PUBLIC_METADATA_RECEIPT=" + json.dumps(output, sort_keys=True), flush=True)
 # Metadata/network failures remain failures even though the recoverable receipt was saved.
-if receipt["result"] == "PARTIAL":
+if receipt["result"] == "PARTIAL" or reviews["status"] in ("ERROR", "PARTIAL"):
     raise SystemExit(1)

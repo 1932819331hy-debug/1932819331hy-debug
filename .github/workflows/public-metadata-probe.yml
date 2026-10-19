@@ -5,6 +5,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  pull-requests: read
+  checks: read
 concurrency:
   group: public-metadata-probe
   cancel-in-progress: false
@@ -25,6 +27,8 @@ jobs:
             public-metadata-v1-
       - name: Verify received probe fixtures
         if: github.event_name == 'workflow_dispatch'
-        run: python3 -m unittest discover -s .github/metadata-probe -p test_probe.py -v
+        run: python3 -m unittest discover -s .github/metadata-probe -p 'test_*.py' -v
       - name: Read public metadata and save derived cache
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 .github/metadata-probe/run_cloud_probe.py

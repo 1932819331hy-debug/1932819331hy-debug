@@ -1,0 +1,11 @@
+query { search(query:"is:pr is:open author:1932819331hy-debug",type:ISSUE,first:100) {
+issueCount pageInfo {hasNextPage endCursor} nodes {... on PullRequest {
+url number headRefOid state author {login}
+reviews(last:100) {totalCount pageInfo {hasPreviousPage startCursor} nodes {databaseId state submittedAt author {login}}}
+reviewThreads(first:100) {totalCount pageInfo {hasNextPage endCursor} nodes {id isResolved isOutdated comments(last:1) {nodes {databaseId updatedAt author {login}}}}}
+comments(last:100) {totalCount pageInfo {hasPreviousPage startCursor} nodes {databaseId updatedAt author {login}}}
+commits(last:1) {nodes {commit {statusCheckRollup {state contexts(first:100) {totalCount pageInfo {hasNextPage endCursor} nodes {
+... on CheckRun {databaseId name status conclusion detailsUrl}
+... on StatusContext {id context state targetUrl}
+}}}}}}
+}}}}
