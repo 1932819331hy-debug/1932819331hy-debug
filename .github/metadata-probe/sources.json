@@ -1,0 +1,48 @@
+{
+  "version": "2026-10-19.codex1",
+  "role": "DERIVED_SOURCE_MANIFEST_NOT_LEDGER",
+  "sources": [
+    {
+      "id": "squash-fast",
+      "kind": "squash",
+      "url": "https://app.squash.ci/jobs.json",
+      "interval": 600,
+      "limit": 100
+    },
+    {
+      "id": "own-open-prs",
+      "kind": "github_search",
+      "url": "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Apr+is%3Aopen+author%3A1932819331hy-debug",
+      "account": "1932819331hy-debug",
+      "interval": 3600,
+      "limit": 30
+    },
+    {
+      "id": "own-pr-head-partitions",
+      "kind": "github_pulls",
+      "url": "https://api.github.com/repos/oll4com/spaceapp/pulls?state=open&per_page=30",
+      "urls": [
+        "https://api.github.com/repos/oll4com/spaceapp/pulls?state=open&per_page=30",
+        "https://api.github.com/repos/limitlessprojects/Go-Hybrid/pulls?state=open&per_page=30",
+        "https://api.github.com/repos/aqualinkorg/aqualink-app/pulls?state=open&per_page=30"
+      ],
+      "account": "1932819331hy-debug",
+      "interval": 3600,
+      "limit": 30
+    },
+    {
+      "id": "cash-discovery-partitions",
+      "kind": "github_search",
+      "url": "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+label%3Abounty+updated%3A%3E%3D2026-10-18",
+      "urls": [
+        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+label%3Abounty+updated%3A%3E%3D2026-10-18",
+        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+%22cash+bounty%22+updated%3A%3E%3D2026-10-18",
+        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+%22%245%22+%22bounty%22+updated%3A%3E%3D2026-10-18"
+      ],
+      "interval": 3600,
+      "limit": 30
+    }
+  ],
+  "canonical_page": "PRIVATE_LEDGER_REFERENCE_NOT_EXPORTED",
+  "executor_delivery": "WORKER_TRIGGER_BLOCKED"
+}

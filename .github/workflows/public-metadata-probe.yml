@@ -1,0 +1,30 @@
+name: Public metadata probe
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-metadata-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.repository == '1932819331hy-debug/1932819331hy-debug'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .probe-state
+          key: public-metadata-v1-${{ github.run_id }}
+          restore-keys: |
+            public-metadata-v1-
+      - name: Verify received probe fixtures
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 -m unittest discover -s .github/metadata-probe -p test_probe.py -v
+      - name: Read public metadata and save derived cache
+        run: python3 .github/metadata-probe/run_cloud_probe.py
