@@ -28,7 +28,7 @@ jobs:
       - name: Verify received probe fixtures
         if: github.event_name == 'workflow_dispatch'
         run: python3 -m unittest discover -s .github/metadata-probe -p 'test_*.py' -v
-      - name: Read public metadata and save derived cache
+      - name: Check hourly heartbeat and save public metadata cache
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/metadata-probe/run_cloud_probe.py

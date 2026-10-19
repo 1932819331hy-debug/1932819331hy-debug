@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import review_metadata
+import healthcheck
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -13,6 +14,10 @@ spec.loader.exec_module(probe)
 manifest = json.loads((ROOT / "sources.json").read_text())
 state = Path(".probe-state")
 state.mkdir(exist_ok=True)
+# This checks a separate natural hourly worker before any source polling.
+# Failures stay visible without preventing this run's mechanical detection.
+health = healthcheck.run(state)
+print("CLOUD_HEALTH_CHECK=" + json.dumps(health, sort_keys=True), flush=True)
 receipt = probe.run(state / "cache.db", manifest, os.getenv("GITHUB_EVENT_NAME", "manual-cloud-verification"))
 receipt.update(
     host="GitHub-hosted standard Ubuntu runner" if os.getenv("GITHUB_ACTIONS") == "true" else "managed cloud manual verification",
@@ -35,9 +40,9 @@ with sqlite3.connect(state / "cache.db") as connection:
         )
     ]
 reviews = review_metadata.run(state)
-output = {"receipt": receipt, "derived_events": events, "reviews": reviews, "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
+output = {"receipt": receipt, "derived_events": events, "reviews": reviews, "health": health, "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
 (state / "latest.json").write_text(json.dumps(output, sort_keys=True) + "\n")
 print("PUBLIC_METADATA_RECEIPT=" + json.dumps(output, sort_keys=True), flush=True)
 # Metadata/network failures remain failures even though the recoverable receipt was saved.
-if receipt["result"] == "PARTIAL" or reviews["status"] in ("ERROR", "PARTIAL"):
+if health["status"] != "HEALTHY" or receipt["result"] == "PARTIAL" or reviews["status"] in ("ERROR", "PARTIAL"):
     raise SystemExit(1)
