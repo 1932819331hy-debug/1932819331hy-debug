@@ -1,11 +1,59 @@
-query { search(query:"is:pr is:open author:1932819331hy-debug",type:ISSUE,first:100) {
-issueCount pageInfo {hasNextPage endCursor} nodes {... on PullRequest {
-url number headRefOid state author {login}
-reviews(last:100) {totalCount pageInfo {hasPreviousPage startCursor} nodes {databaseId state submittedAt author {login}}}
-reviewThreads(first:100) {totalCount pageInfo {hasNextPage endCursor} nodes {id isResolved isOutdated comments(last:1) {nodes {databaseId updatedAt author {login}}}}}
-comments(last:100) {totalCount pageInfo {hasPreviousPage startCursor} nodes {databaseId updatedAt author {login}}}
-commits(last:1) {nodes {commit {statusCheckRollup {state contexts(first:100) {totalCount pageInfo {hasNextPage endCursor} nodes {
-... on CheckRun {databaseId name status conclusion detailsUrl}
-... on StatusContext {id context state targetUrl}
-}}}}}}
-}}}}
+query OpenReviewMetadata($account: String!, $after: String) {
+  user(login: $account) {
+    pullRequests(states: OPEN, first: 20, after: $after,
+                 orderBy: {field: CREATED_AT, direction: ASC}) {
+      totalCount
+      pageInfo { hasNextPage endCursor }
+      nodes { ...PullRequestMetadata }
+    }
+  }
+}
+fragment ActorMetadata on Actor { login __typename }
+fragment PullRequestMetadata on PullRequest {
+  id url number headRefOid state repository { nameWithOwner isPrivate }
+  author { ...ActorMetadata }
+  reviews(first: 50) { ...ReviewPage }
+  reviewThreads(first: 50) { ...ThreadPage }
+  comments(first: 20) { ...CommentPage }
+  commits(last: 1) {
+    nodes { commit {
+      oid
+      statusCheckRollup { id state contexts(first: 100) { ...CheckPage } }
+    } }
+  }
+}
+fragment ReviewPage on PullRequestReviewConnection {
+  totalCount pageInfo { hasNextPage endCursor }
+  nodes {
+    id databaseId url state submittedAt body commit { oid }
+    author { ...ActorMetadata }
+  }
+}
+fragment ThreadPage on PullRequestReviewThreadConnection {
+  totalCount pageInfo { hasNextPage endCursor }
+  nodes {
+    id isResolved isOutdated path line originalLine
+    comments(first: 20) { ...ThreadCommentPage }
+  }
+}
+fragment ThreadCommentPage on PullRequestReviewCommentConnection {
+  totalCount pageInfo { hasNextPage endCursor }
+  nodes {
+    id databaseId url body updatedAt
+    author { ...ActorMetadata }
+    pullRequestReview { id commit { oid } }
+    replyTo { id }
+  }
+}
+fragment CommentPage on IssueCommentConnection {
+  totalCount pageInfo { hasNextPage endCursor }
+  nodes { id databaseId url body updatedAt author { ...ActorMetadata } }
+}
+fragment CheckPage on StatusCheckRollupContextConnection {
+  totalCount pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on CheckRun { id databaseId name status conclusion detailsUrl }
+    ... on StatusContext { id context state targetUrl }
+  }
+}
