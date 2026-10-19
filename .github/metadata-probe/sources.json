@@ -37,7 +37,8 @@
       "urls": [
         "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+label%3Abounty+updated%3A%3E%3D2026-10-18",
         "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+%22cash+bounty%22+updated%3A%3E%3D2026-10-18",
-        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+%22%245%22+%22bounty%22+updated%3A%3E%3D2026-10-18"
+        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+%22%245%22+%22bounty%22+updated%3A%3E%3D2026-10-18",
+        "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+label%3Abounty+updated%3A%3C2026-10-18"
       ],
       "interval": 3600,
       "limit": 30
