@@ -73,6 +73,48 @@ ID with changed bytes is rejected. Only the sole existing writer can acknowledge
 the map is not a lock for concurrent writers. A historical private transport
 control must stay labelled and cannot become new bounty or natural delivery credit.
 
+## Interrupted committed-candidate recovery
+
+`worker_recovery.py --checkpoint checkpoint.json --context context.json --target
+/absolute/new/private/path` restores source for one pending **idempotent local
+check**. It reuses the original Page, roles and step/action receipt. It is not a
+runner or a second ledger. Dirty/uncommitted work, external exactly-once actions,
+large repositories and unsupported Git modes are outside this bounded version.
+
+After committing a candidate and confirming its working tree is clean, its owner
+can use `git bundle create checkpoint.bundle HEAD`. Wrap the bundle bytes in
+readable JSON (at most 256 KiB): version 1, the seven worker-report identity
+fields, `checkpoint_id`, `tree_sha`, `next_step_id`, `checkpoint_kind`
+(`COMMITTED_CANDIDATE` or `PRIVATE_HISTORICAL_RECOVERY_CONTROL`),
+`bundle_base64`, and `bundle_sha256`. Upload/read back through the same Page
+Files before relying on the checkpoint. The helper verifies prerequisites in an
+empty Git repository: a thin/partial bundle cannot silently fetch its missing base.
+
+The fresh canonical context contains the seven identity fields plus
+`checkpoint_sha256` (Page Files readback), `step_id`,
+`step_kind: IDEMPOTENT_LOCAL_CHECK`, `step_state`,
+`completed_checkpoint_sha256` (null until completed), and `resume_authorized`.
+The original writer decides authorization from the actual owner/branch/ticket;
+the checkpoint cannot grant it. Examples are in the focused real-Git tests.
+
+PENDING restores into a new private directory, checks exact commit/tree/index and
+raw regular-file bytes, and returns `RESTORED_PENDING_CHECK`. Git uses only local
+bundle transport; files are written without checkout filters, hooks from source,
+submodule checkout or checkpoint-authored command execution. The restored repo
+has a detached HEAD and no configured publication remote. Existing paths are
+never replaced; a partial failure leaves only its newly reserved target for
+reconciliation. This is not a sandbox against another process with the same UID.
+
+Before executing the trusted check from the **canonical ticket**, the sole writer
+conditionally records/read-backs STARTED for the returned source-independent
+action key. Preserve real argv/exit/log and a single invocation marker in the
+private drill; on success save the completed checkpoint digest and actual result
+to the same Page, read back, then repeat the helper with fresh COMPLETED context.
+It must return `ALREADY_COMPLETED_NO_ACTION`, without restoring or running a step.
+STARTED with no durable result returns `IN_FLIGHT_REQUIRES_RECONCILIATION` (CLI3),
+never blind retry. This conservative gap handling does not promise exactly-once
+arbitrary side effects. Original test/review/publication gates still apply.
+
 Keep observed event IDs separately from a source-independent Page action key
 containing task ID, repository/branch, expected head, action type and target
 review/comment ID when applicable. Multiple sources describing the same action
