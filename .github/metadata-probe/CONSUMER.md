@@ -181,8 +181,33 @@ separate; no automatic human acknowledgement or new notification channel exists.
 The cron is a ten-minute target, not a platform delivery guarantee. Measure
 actual schedule runs and source read times. New-source research remains a
 bounded attempt at most every two hours; full WIP does not stop lightweight
-known-source discovery. Do not add a fifth manifest source without accounting
-for the bounded per-pass source budget.
+known-source discovery.
+
+`max_source_reads` in `sources.json` is a positive integer network-read budget
+(default 4), independent of candidate or task capacity. Only due sources consume
+it. Due sources rotate by their persisted oldest `last_checked` timestamp, with
+manifest order breaking ties; failed attempts also update that timestamp while
+preserving their successful cursor and retry backoff. Sources waiting for their
+interval/backoff consume no reads. `source_budget.deferred_source_ids` names due
+sources left unread in this pass; `processed` counts attempted network reads.
+Deferred due sources produce `PARTIAL_BUDGET` / a `PARTIAL` receipt. The next pass
+can serve them even while earlier manifest sources are not due. Each selected
+source reads one partition/page, retaining the existing exact-page validators.
+
+`known-repository-issues` reads open issues directly through GitHub's repository
+issues API for Go-Hybrid, dataprof and rtk, without a bounty-label requirement or
+the search API's 1,000-result cap. The repository API also returns PRs; the probe
+filters them from candidate observations but counts them for page continuation.
+A full page means there may be another page, including when every row was a PR.
+No snapshot of a changing paginated listing guarantees complete coverage; inspect
+partition/page cursors, timestamps and failed reads before inferring absence.
+
+These ordinary issue observations retain `amount_minor: null`,
+`amount_status: UNKNOWN`, `qualification_required: true`, and
+`cash_opportunity_verified: false`. Repository membership establishes no funding
+or contribution eligibility. They retain baseline/unverified classification and
+`dispatch_allowed: false` / `publish_allowed: false`; the existing controller
+must verify current policy, issue scope and acceptance before engineering.
 
 An incomplete review attempt is retained separately from the last complete
 `reviews.json`. Its retry state preserves pending cursors. Fetch the complete

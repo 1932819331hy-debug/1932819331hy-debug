@@ -42,8 +42,21 @@
       ],
       "interval": 3600,
       "limit": 30
+    },
+    {
+      "id": "known-repository-issues",
+      "kind": "github_issues",
+      "url": "https://api.github.com/repos/limitlessprojects/Go-Hybrid/issues?state=open&sort=updated&direction=desc&per_page=30",
+      "urls": [
+        "https://api.github.com/repos/limitlessprojects/Go-Hybrid/issues?state=open&sort=updated&direction=desc&per_page=30",
+        "https://api.github.com/repos/AndreaBozzo/dataprof/issues?state=open&sort=updated&direction=desc&per_page=30",
+        "https://api.github.com/repos/rtk-ai/rtk/issues?state=open&sort=updated&direction=desc&per_page=30"
+      ],
+      "interval": 3600,
+      "limit": 30
     }
   ],
   "canonical_page": "PRIVATE_LEDGER_REFERENCE_NOT_EXPORTED",
-  "executor_delivery": "WORKER_TRIGGER_BLOCKED"
+  "executor_delivery": "WORKER_TRIGGER_BLOCKED",
+  "max_source_reads": 4
 }

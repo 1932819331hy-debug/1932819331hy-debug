@@ -290,4 +290,79 @@ class ProbeTests(unittest.TestCase):
    self.assertEqual(source['coverage']['scope'],'EXACT_SOURCE_QUERY_PARTITION_PAGE')
    self.assertEqual(source['coverage']['checked_at'],'1970-01-01T00:16:40+00:00')
    self.assertEqual(source['cursor']['rotation'],1)
+ def test_repository_issues_discover_unlabelled_tasks_and_filter_prs(self):
+  source=dict(self.source,kind='github_issues',limit=2,url='https://api.github.com/repos/a/b/issues?state=open&per_page=2')
+  issue=self.gh_item(labels=[])
+  pr=self.gh_item(id=11,html_url='https://github.com/a/b/pull/2',pull_request={})
+  r=self.run_probe((200,{},json.dumps([issue,pr]).encode()),sources=[source])
+  self.assertEqual(r['sources'][0]['status'],'OK')
+  self.assertEqual(r['new_events'],1)
+  self.assertTrue(r['sources'][0]['has_more'])
+  self.assertFalse(r['sources'][0]['api_result_cap'])
+  event=self.events()[0][1]
+  self.assertEqual(event['task_id'],'github:a/b:issue:1')
+  self.assertIsNone(event['amount_minor'])
+  self.assertEqual(event['amount_status'],'UNKNOWN')
+  self.assertTrue(event['qualification_required'])
+  self.assertFalse(event['cash_opportunity_verified'])
+  self.assertFalse(event['dispatch_allowed']);self.assertFalse(event['publish_allowed'])
+  self.assertEqual(event['kind'],'BASELINE_UNTRIAGED')
+ def test_repository_issue_pr_only_page_still_advances_and_retries_exact_page(self):
+  source=dict(self.source,kind='github_issues',limit=1,url='https://api.github.com/repos/a/b/issues?state=open&per_page=1')
+  pr=self.gh_item(html_url='https://github.com/a/b/pull/1',pull_request={})
+  r=self.run_probe((200,{},json.dumps([pr]).encode()),sources=[source])
+  self.assertEqual(r['sources'][0]['status'],'OK')
+  self.assertEqual(self.state()['pages'],{'0':2})
+  r=self.run_probe((429,{'retry-after':'4000'},b''),1601,[source])
+  self.assertEqual(r['sources'][0]['status'],'ERROR')
+  self.assertEqual(self.state()['pages'],{'0':2})
+  seen=[]
+  def transport(chosen,headers):
+   seen.append(chosen['url']);return (200,{},json.dumps([self.gh_item()]).encode())
+  self.p.run(self.db,{'canonical_page':'page_existing','sources':[source]},'fixture',10000,transport)
+  self.assertIn('page=2',seen[0])
+  self.assertEqual(self.events()[0][1]['kind'],'BASELINE_UNTRIAGED')
+ def test_fifth_due_source_is_served_next_pass_before_repeated_sources(self):
+  sources=[dict(self.source,id=str(i),interval=1) for i in range(5)]
+  manifest={'canonical_page':'page_existing','sources':sources}
+  seen=[]
+  def transport(source,headers):seen.append(source['id']);return self.response([])
+  self.p.run(self.db,manifest,'fixture',1000,transport)
+  seen.clear()
+  r=self.p.run(self.db,manifest,'fixture',1002,transport)
+  self.assertEqual(seen,['4','0','1','2'])
+  self.assertEqual(r['source_budget']['deferred_source_ids'],['3'])
+ def test_not_due_sources_do_not_spend_read_budget(self):
+  sources=[dict(self.source,id=str(i)) for i in range(6)]
+  manifest={'canonical_page':'page_existing','sources':sources}
+  seen=[]
+  def transport(source,headers):seen.append(source['id']);return self.response([])
+  self.p.run(self.db,manifest,'fixture',1000,transport)
+  seen.clear()
+  r=self.p.run(self.db,manifest,'fixture',1001,transport)
+  self.assertEqual(seen,['4','5'])
+  self.assertEqual(r['source_budget']['processed'],2)
+  self.assertEqual(r['source_budget']['deferred_source_ids'],[])
+  self.assertEqual(r['result'],'NO_CHANGE')
+ def test_configured_read_budget_rotates_failed_sources_after_backoff(self):
+  sources=[dict(self.source,id=str(i),interval=1) for i in range(3)]
+  manifest={'canonical_page':'page_existing','sources':sources,'max_source_reads':1}
+  seen=[]
+  def transport(source,headers):seen.append(source['id']);return (503,{},b'')
+  for now in (1000,1003,1006,1009):self.p.run(self.db,manifest,'fixture',now,transport)
+  self.assertEqual(seen,['0','1','2','0'])
+  self.assertEqual(self.state('0')['partition'],0)
+  self.assertEqual(self.state('0')['last_checked'],1009)
+ def test_invalid_read_budget_is_rejected_without_network_reads(self):
+  for budget in (0,-1,True,'4',1.5):
+   with self.subTest(budget=budget),self.assertRaises(ValueError):
+    self.p.run(self.db,{'canonical_page':'page_existing','sources':[self.source],'max_source_reads':budget},'fixture',1000,lambda *_:self.fail('network must not run'))
+ def test_manifest_includes_direct_known_repository_issue_discovery(self):
+  manifest=json.loads(Path(__file__).with_name('sources.json').read_text())
+  direct=[source for source in manifest['sources'] if source['kind']=='github_issues']
+  self.assertTrue(direct,'direct issues discovery missing')
+  urls=[url for source in direct for url in source.get('urls',[source['url']])]
+  for repo in ('limitlessprojects/Go-Hybrid','AndreaBozzo/dataprof','rtk-ai/rtk'):
+   self.assertTrue(any('/repos/'+repo+'/issues?' in url and 'state=open' in url for url in urls),repo)
+  self.assertTrue(all('label' not in url and '/search/' not in url for url in urls))
 if __name__=='__main__': unittest.main()

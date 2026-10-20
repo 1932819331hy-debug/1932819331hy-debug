@@ -46,8 +46,8 @@ def normalize(source,data):
         if not isinstance(data,dict) or not isinstance(data.get('items'),list): raise ValueError('Missing items list')
         if data.get('incomplete_results'): raise ValueError('GitHub incomplete_results; retain prior coverage')
         raw=data['items']; total=data.get('total_count')
-    elif kind=='github_pulls':
-        if not isinstance(data,list): raise ValueError('Expected PR list')
+    elif kind in ('github_pulls','github_issues'):
+        if not isinstance(data,list): raise ValueError('Expected GitHub list')
         raw=data; total=None
     else: raise ValueError('Unsupported source parser')
     if total is not None and (type(total) is not int or total<0): raise ValueError('Invalid total count')
@@ -59,6 +59,8 @@ def normalize(source,data):
     seen={}
     for x in raw:
         if not isinstance(x,dict): raise ValueError('Malformed item')
+        # The repository issues endpoint also returns PRs, which are not tasks here.
+        if kind=='github_issues' and 'pull_request' in x: continue
         if kind=='squash':
             identity=x.get('spec_id'); url=x.get('repo_url'); status=x.get('state')
             if not isinstance(identity,str) or not identity or not isinstance(url,str) or not url or not isinstance(status,str):
@@ -78,6 +80,7 @@ def normalize(source,data):
                 raise ValueError('Missing GitHub identity/user/url/state')
             task_id,repo,task_kind,number=github_identity(url)
             if not task_id: raise ValueError('Unrecognized GitHub task URL')
+            if kind=='github_issues' and task_kind=='pull': continue
             if source.get('account') and user['login'].casefold()!=source['account'].casefold(): continue
             meaningful={'state':status,'draft':x.get('draft'),'merged':x.get('merged'),'merged_at':x.get('merged_at')}
             if kind=='github_pulls':
@@ -93,13 +96,15 @@ def normalize(source,data):
                           pr=number if task_kind=='pull' else None,head=meaningful.get('head'),squash_id=None,
                           amount_minor=None,currency=None,html_url=url,author=user['login'],source_event_ids=['github:'+str(identity)],
                           title=x.get('title'),comments=x.get('comments'),created_at=x.get('created_at'),updated_at=x.get('updated_at'))
+            if kind=='github_issues':
+                snapshot.update(amount_status='UNKNOWN',qualification_required=True)
         fingerprint=digest(meaningful)
         if task_id in seen:
             if seen[task_id]!=fingerprint: raise ValueError('Conflicting duplicate task in response')
             continue
         seen[task_id]=fingerprint
         items.append((task_id,snapshot,meaningful))
-    more=(kind=='github_pulls' and len(raw)>=limit) or (kind=='github_search' and page*limit<min(total,1000))
+    more=(kind in ('github_pulls','github_issues') and len(raw)>=limit) or (kind=='github_search' and page*limit<min(total,1000))
     coverage={'returned':len(raw),'total':total,'saturated':len(raw)>=limit or (total is not None and total>len(raw)),
               'has_more':more,'complete':not more and not (kind=='github_search' and total>1000),
               'api_result_cap':kind=='github_search' and total>1000,
@@ -162,6 +167,8 @@ def fresh_candidate(source,snapshot,cached,start):
 
 def run(db,manifest,trigger,now=None,transport=fetch):
     start=time.time() if now is None else now
+    budget=manifest.get('max_source_reads',4)
+    if type(budget) is not int or budget<1: raise ValueError('max_source_reads must be a positive integer')
     Path(db).parent.mkdir(parents=True,exist_ok=True)
     con=sqlite3.connect(db,timeout=1)
     migrate(con)
@@ -171,14 +178,24 @@ def run(db,manifest,trigger,now=None,transport=fetch):
     receipt={'id':'probe-'+uuid.uuid4().hex,'trigger':trigger,'pid':os.getpid(),'parent_pid':os.getppid(),'program_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'manifest_sha256':digest(manifest),'start':utc(start),'prior_receipt_id':prior[0] if prior else None,'canonical_page':manifest['canonical_page'],'cache_role':'DERIVED_NO_DISPATCH_AUTHORITY','sources':[],'new_events':0,'model_calls':0,'public_writes':0,'executor_delivery':'NOT_CONFIGURED','host':'runtime process; no ownership claim'}
     try:
         receipt['legacy_events_quarantined']=quarantine_legacy(con)
-        receipt['source_budget']={'limit':4,'configured':len(manifest['sources']),'processed':min(4,len(manifest['sources'])),
-                                  'deferred_source_ids':[source['id'] for source in manifest['sources'][4:]],
-                                  'coverage':'PARTIAL_BUDGET' if len(manifest['sources'])>4 else 'WITHIN_BUDGET'}
-        for source in manifest['sources'][:4]:
+        # Only due reads consume the network budget. Oldest attempted sources run
+        # first; manifest order breaks ties and persisted timestamps survive restarts.
+        prepared=[]
+        for source in manifest['sources']:
             row=con.execute('SELECT state FROM sources WHERE id=?',(source['id'],)).fetchone(); state=json.loads(row[0]) if row else {}
             spec=digest({key:source.get(key) for key in ('kind','url','urls','account','limit')})
             if state.get('schema_version')!=2 or state.get('spec_digest')!=spec:
                 state={'schema_version':2,'spec_digest':spec,'partition':0,'pages':{},'representations':{}}
+            prepared.append((source,state,spec))
+        due=[entry for entry in prepared if start>=entry[1].get('next_due',0)]
+        due.sort(key=lambda entry:entry[1].get('last_checked',float('-inf')))
+        selected=due[:budget]; deferred=due[budget:]
+        receipt['source_budget']={'limit':budget,'configured':len(prepared),'processed':len(selected),
+                                  'deferred_source_ids':[entry[0]['id'] for entry in deferred],
+                                  'coverage':'PARTIAL_BUDGET' if deferred else 'WITHIN_BUDGET'}
+        # Include NOT_DUE evidence without spending reads; deferred due sources are
+        # named explicitly above and keep their exact state for a later pass.
+        for source,state,spec in selected+[entry for entry in prepared if start<entry[1].get('next_due',0)]:
             result={'source':source['id'],'query_spec_digest':spec,'coverage':copy.deepcopy(state.get('coverage',{})),
                     'cursor':{'rotation':state.get('partition',0),'pages':copy.deepcopy(state.get('pages',{}))},
                     'last_success_at':utc(state['last_success']) if 'last_success' in state else None}
@@ -248,6 +265,8 @@ def run(db,manifest,trigger,now=None,transport=fetch):
                                                  'presence_reason':'ABSENT_FROM_COMPLETE_SOURCE_LISTING_UNVERIFIED' if snapshot.get('source_present') is False else 'PRESENT_IN_SUCCESSFUL_SOURCE_RESPONSE'},
                                      'revision':revision,'builder':'UNKNOWN','publisher':'UNKNOWN','dispatch_allowed':False,'publish_allowed':False,'model_calls':0,
                                      'authority':'CANONICAL_PAGE_ONLY','cash_opportunity_verified':False}
+                            if source['kind']=='github_issues':
+                                payload.update(amount_status='UNKNOWN',qualification_required=True)
                             added=con.execute('INSERT OR IGNORE INTO events VALUES(?,?,?,?,?)',(event_id,source['id'],identity,json.dumps(payload),start)).rowcount
                             inserted+=added;event_counts[kind]=event_counts.get(kind,0)+added
                         else: revision=(old[2] or 0) if old else 0
@@ -276,7 +295,7 @@ def run(db,manifest,trigger,now=None,transport=fetch):
                 con.execute('ROLLBACK TO source_response');con.execute('RELEASE source_response');state=successful_state
                 state['failures']=state.get('failures',0)+1
                 backoff=retry_delay(h,start,source['interval'],state['failures'])
-                state.update(last_error=str(error)[:500],next_due=start+backoff)
+                state.update(last_checked=start,last_error=str(error)[:500],next_due=start+backoff)
                 result.update(status='ERROR',error=str(error)[:500],next_due=utc(state['next_due']))
             con.execute('INSERT OR REPLACE INTO sources VALUES(?,?)',(source['id'],json.dumps(state)))
             receipt['sources'].append(result)
