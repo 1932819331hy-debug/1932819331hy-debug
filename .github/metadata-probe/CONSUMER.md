@@ -229,6 +229,41 @@ workflow preserves recoverable cache and artifacts even when a read fails.
 
 ## Selected engineering round receipt
 
+Before marking a candidate READY, the existing owner can run the live execution
+mode of the existing publication preflight in the **same cloud checkout that will
+execute the task**:
+
+```sh
+python3 publication_preflight.py --repo OWNER/REPO --actor EXPECTED_LOGIN \
+  --workdir /absolute/task/checkout --expected-head EXACT_40_HEX_SHA \
+  --environment-id CURRENT_CLOUD_ENVIRONMENT_ID --require-tool python3 \
+  --require-file PROJECT_LOCK_OR_INSTALLED_DEPENDENCY_FILE --test-entry tests/test_task.py
+```
+
+Repeat `--require-tool`, `--require-file`, and `--test-entry` for the project's
+actual prerequisites. Select its pinned versions using the existing environment
+workflow first; executable/file presence alone does not prove version compatibility
+or that the prerequisite list is complete. This mode records this process's host,
+checkout root and exact HEAD, live `gh api user` identity, resolved executables,
+regular files inside that checkout, and actual inspection start/end times. The
+environment ID is labeled caller context, not independently attested host identity.
+Tests are not executed by this read-only preflight. Run the project's acceptance
+tests separately and retain their exact SHA, exit codes and logs.
+
+`execution.local_work_ready` is separate from `path_candidate_present`.
+`ready_candidate` requires both, while `pr_publication_verified` stays false until
+an actual authorized PR and remote HEAD readback. A missing fork or denied
+publication path leaves independently runnable local work available. Each missing
+execution prerequisite has a concrete recovery condition. Exit 2 means at least
+one READY prerequisite remains missing; inspect the separate fields rather than
+treating it as a global stop. Continue other owned executable tickets. This mode
+does not grant ownership, dispatch rights, create credentials, retry denials, or
+write remotely. `--from-json` cannot substitute for the live same-host checks.
+
+Existing publication-only calls retain their original output and exit semantics.
+Using this mode once manually does not establish deployment, natural invocation,
+complete dependency coverage, or automatic cross-environment recovery.
+
 The original canonical writer can run `python3 round_receipt.py --context
 context.json --receipt receipt.json` before closing its existing round. This
 helper reads files only; it does not execute commands, dispatch work, store a

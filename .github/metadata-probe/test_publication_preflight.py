@@ -1,6 +1,12 @@
 import unittest
 import subprocess
+import tempfile
+import contextlib
+import io
+import json
+from pathlib import Path
 from unittest.mock import patch
+import publication_preflight as preflight
 from publication_preflight import classify_publication_path, read_repo_metadata
 
 class PublicationPreflightTests(unittest.TestCase):
@@ -92,6 +98,126 @@ class PublicationPreflightTests(unittest.TestCase):
             result = read_repo_metadata("worker/project")
         self.assertNotIn("sensitive", str(result))
         self.assertEqual(result["error_class"], "INVALID_JSON")
+
+class ExecutionPreflightTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit',
+                        '--allow-empty', '-qm', 'fixture'], check=True)
+        self.head = subprocess.check_output(['git', '-C', str(self.root), 'rev-parse', 'HEAD'], text=True).strip()
+        (self.root / 'test_entry.py').write_text('pass\n')
+        self.identity = patch.object(preflight, 'read_current_identity', return_value={'login': 'worker'})
+        self.identity.start()
+        self.addCleanup(self.identity.stop)
+
+    def inspect(self, **overrides):
+        args = dict(workdir=self.root, expected_head=self.head, environment_id='cloud-fixture',
+                    actor='worker', required_tools=['python3'], required_files=[],
+                    test_entries=['test_entry.py'])
+        args.update(overrides)
+        return preflight.inspect_execution_environment(**args)
+
+    def test_live_checkout_identity_dependencies_and_entry_allow_local_work(self):
+        result = self.inspect()
+        self.assertTrue(result['local_work_ready'])
+        self.assertEqual(result['head_sha'], self.head)
+        self.assertEqual(result['workdir'], str(self.root))
+        self.assertFalse(result['dependency_scope_attested'])
+        self.assertFalse(result['tests_executed'])
+        self.assertFalse(result['dispatch_authorized'])
+
+    def test_missing_dependency_has_recovery_and_does_not_execute_test(self):
+        result = self.inspect(required_tools=['definitely-missing-bounty-tool'])
+        self.assertFalse(result['local_work_ready'])
+        self.assertEqual(result['blockers'][0]['code'], 'DEPENDENCY_MISSING')
+        self.assertTrue(result['blockers'][0]['recovery'])
+        self.assertFalse(result['tests_executed'])
+
+    def test_stale_head_and_wrong_checkout_root_do_not_pass(self):
+        self.assertFalse(self.inspect(expected_head='0' * 40)['local_work_ready'])
+        sub = self.root / 'sub'; sub.mkdir()
+        self.assertFalse(self.inspect(workdir=sub)['local_work_ready'])
+
+    def test_read_identity_is_verified_separately_from_repository_metadata(self):
+        with patch.object(preflight, 'read_current_identity', return_value={'login': 'other'}):
+            result = self.inspect()
+        self.assertFalse(result['local_work_ready'])
+        self.assertEqual(result['blockers'][0]['code'], 'READ_IDENTITY_MISMATCH')
+
+    def test_identity_failure_keeps_safe_error_and_recovery(self):
+        with patch.object(preflight, 'read_current_identity', return_value={'error_class': 'READ_IDENTITY_UNAVAILABLE', 'exit_code': 4}):
+            result = self.inspect()
+        self.assertFalse(result['local_work_ready'])
+        self.assertEqual(result['blockers'][0]['code'], 'READ_IDENTITY_UNAVAILABLE')
+        self.assertNotIn('token', str(result).lower())
+
+    def test_missing_or_escaping_test_entries_and_dependency_files_are_blocked(self):
+        outside = self.root.parent / (self.root.name + '-outside.py')
+        outside.write_text('pass\n'); self.addCleanup(outside.unlink)
+        (self.root / 'escape.py').symlink_to(outside)
+        for entries in [[], ['missing.py'], ['../' + outside.name], ['escape.py']]:
+            with self.subTest(entries=entries):
+                self.assertFalse(self.inspect(test_entries=entries)['local_work_ready'])
+        self.assertFalse(self.inspect(required_files=['missing.lock'])['local_work_ready'])
+
+    def test_empty_or_malformed_scope_never_implies_readiness(self):
+        for args in [dict(required_tools=[]), dict(environment_id=' '),
+                     dict(required_tools=['--help']), dict(expected_head='HEAD')]:
+            with self.subTest(args=args):
+                self.assertFalse(self.inspect(**args)['local_work_ready'])
+
+    def test_identity_reader_does_not_echo_raw_auth_errors(self):
+        self.identity.stop()
+        proc = subprocess.CompletedProcess([], 4, '', 'sensitive auth diagnostic')
+        with patch.object(preflight.subprocess, 'run', return_value=proc):
+            result = preflight.read_current_identity()
+        self.assertNotIn('sensitive', str(result))
+        self.assertEqual(result['exit_code'], 4)
+
+    def cli(self, extra, metadata):
+        output = io.StringIO()
+        args = ['publication_preflight.py', '--repo', 'upstream/project', '--actor', 'worker', *extra]
+        with patch('sys.argv', args), patch.object(preflight, 'read_repo_metadata', side_effect=metadata), contextlib.redirect_stdout(output):
+            code = preflight.main()
+        return code, json.loads(output.getvalue())
+
+    def live_args(self):
+        return ['--workdir', str(self.root), '--expected-head', self.head,
+                '--environment-id', 'cloud-fixture', '--require-tool', 'python3',
+                '--test-entry', 'test_entry.py']
+
+    def test_cli_publication_denial_preserves_runnable_local_work(self):
+        target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': False}}}
+        code, result = self.cli(self.live_args(), [target, {'http_status': 403}])
+        self.assertEqual(code, 2)
+        self.assertTrue(result['execution']['local_work_ready'])
+        self.assertFalse(result['ready_candidate'])
+        self.assertEqual(result['http_status'], 403)
+        self.assertTrue(result['publication_recovery'])
+
+    def test_cli_writable_repo_does_not_mask_missing_execution_dependency(self):
+        target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': True}}}
+        code, result = self.cli(self.live_args() + ['--require-file', 'missing.lock'], [target])
+        self.assertEqual(code, 2)
+        self.assertTrue(result['path_candidate_present'])
+        self.assertFalse(result['execution']['local_work_ready'])
+        self.assertFalse(result['ready_candidate'])
+
+    def test_legacy_cli_does_not_add_execution_claims(self):
+        target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': True}}}
+        code, result = self.cli([], [target])
+        self.assertEqual(code, 0)
+        self.assertNotIn('execution', result)
+        self.assertNotIn('ready_candidate', result)
+
+    def test_cli_cannot_substitute_imported_metadata_for_same_host_read(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            self.cli(self.live_args() + ['--from-json', 'imported.json'], [])
+        self.assertEqual(error.exception.code, 2)
 
 if __name__ == "__main__":
     unittest.main()
