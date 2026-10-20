@@ -38,6 +38,41 @@ using freshly read block hashes and re-read it. On a hash conflict, re-read and
 reconcile without replacing concurrent changes. A text lease is not a lock.
 Page access failure is `STATE_ACCESS_BLOCKED` and never creates a second ledger.
 
+## Checked worker-report transport
+
+`worker_report.py --report report.json --context context.json` validates one
+bounded UTF-8 JSON report (at most 256 KiB). It is a read-only helper for the
+existing Page writer, with no dispatcher, credentials, scheduler or state store.
+The context comes from the freshly read canonical ticket, never from the report:
+`task_id`, `repo`, `branch`, `owner`, `builder`, `publisher`, `head_sha`,
+`ticket_state`, `report_sha256` (the same Page Files readback digest), and
+`accepted_reports` (the Page's report-id-to-digest acknowledgements).
+
+Report schema version 1 has those seven identity fields, `report_id`,
+`tested_sha`, `outcome` (`COMPLETED`, `IN_PROGRESS`, or `BLOCKED`),
+`report_kind` (`WORKER_RESULT` or `PRIVATE_HISTORICAL_TRANSPORT_CONTROL`),
+`evidence` (`path`, UTF-8 `text`, `sha256`), and `checks` (`argv`, actual
+`exit_code`, `tested_sha`, `log_path`). Every check must reference an included
+log. The module's focused tests provide a complete minimal example. Include
+patch/source and logs as data when needed; payload commands are never executed.
+
+Worker: upload the report into the existing Page Files destination and read it
+back, then hand its exact reference/digest to the original writer. Writer: read
+the fresh ticket and acknowledgement map, retrieve the report, run this helper,
+and retain its exact output. `VALIDATED` proves matching metadata and transport
+bytes only: worker-authored test claims still require the normal exact-commit
+evidence/review gates. Nonzero checks and blocked ticket state are preserved.
+This helper never promotes READY, transfers roles, proves source-to-commit
+identity, or attests natural delivery. Apply the existing canonical policy.
+
+For a new validated report, conditionally save `{report_id: report_sha256}` and
+the reference/checked receipt in the same Page, then read back. No acknowledgement
+exists until that save succeeds. On conflict or uncertain write, read fresh state
+and rerun the validator; `ALREADY_CONSUMED` means no further import/action. Same
+ID with changed bytes is rejected. Only the sole existing writer can acknowledge;
+the map is not a lock for concurrent writers. A historical private transport
+control must stay labelled and cannot become new bounty or natural delivery credit.
+
 Keep observed event IDs separately from a source-independent Page action key
 containing task ID, repository/branch, expected head, action type and target
 review/comment ID when applicable. Multiple sources describing the same action
