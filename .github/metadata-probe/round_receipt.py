@@ -153,7 +153,7 @@ def main():
         reason = str(exc) if type(exc) is ValueError else type(exc).__name__
         print(json.dumps({'status': 'REJECTED', 'reason': reason}), file=sys.stderr)
         return 2
-    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    print(json.dumps(result, sort_keys=True))
     return 0 if result['status'] == 'VALIDATED' else 2
 
 

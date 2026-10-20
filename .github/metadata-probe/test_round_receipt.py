@@ -160,6 +160,20 @@ class RoundReceiptTests(unittest.TestCase):
         receipt['outcome'] = 'COMPLETED'
         self.assertEqual(self.validate(context, receipt)['status'], 'VALIDATED')
 
+    def test_cli_json_escape_survives_terminal_encoding(self):
+        context, receipt = fixture()
+        context['round_id'] = receipt['round_id'] = '\ud800'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, value in (('context', context), ('receipt', receipt)):
+                (root / (name + '.json')).write_text(json.dumps(value))
+            result = subprocess.run([sys.executable, str(MODULE), '--context', str(root / 'context.json'),
+                                     '--receipt', str(root / 'receipt.json')], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)['round_id'], '\ud800')
+            self.assertFalse(json.loads(result.stdout)['execution_attested'])
+            self.assertEqual(result.stderr, '')
+
     def test_cli_never_executes_commands_and_missing_work_exits_nonzero(self):
         context, receipt = fixture()
         with tempfile.TemporaryDirectory() as tmp:
