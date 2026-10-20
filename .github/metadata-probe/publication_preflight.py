@@ -193,6 +193,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo")
     parser.add_argument("--actor")
+    parser.add_argument('--fork', help='Existing actor-owned fork to look up live when upstream does not report push access; supports renamed forks.')
     parser.add_argument("--from-json", type=Path, help="Authorized connector metadata, including a known renamed fork; no credentials.")
     parser.add_argument('--workdir', type=Path, help='Optional live same-host execution preflight for the existing task checkout.')
     parser.add_argument('--expected-head')
@@ -201,6 +202,8 @@ def main():
     parser.add_argument('--require-file', action='append', default=[])
     parser.add_argument('--test-entry', action='append', default=[])
     args = parser.parse_args()
+    if args.fork and args.from_json:
+        parser.error('--fork selects a live lookup and cannot be combined with --from-json metadata.')
     execution_requested = args.workdir is not None or args.expected_head is not None or args.environment_id is not None or bool(args.require_tool or args.require_file or args.test_entry)
     if execution_requested and (args.from_json or args.workdir is None):
         parser.error('Live execution checks require --workdir and the live gh channel, not --from-json metadata.')
@@ -217,10 +220,14 @@ def main():
         invalid = classify_publication_path(target_repo, actor, {}, {})
         if invalid["status"] == "INVALID_REPO_OR_ACTOR":
             parser.error("--repo OWNER/REPO and --actor LOGIN are required.")
+        fork_repo = args.fork if args.fork is not None else actor + '/' + target_repo.split('/', 1)[1]
+        invalid_fork = classify_publication_path(fork_repo, actor, {}, {})
+        if invalid_fork['status'] == 'INVALID_REPO_OR_ACTOR' or fork_repo.split('/', 1)[0].casefold() != actor.casefold():
+            parser.error('--fork must name an existing repository owned by --actor.')
         upstream = read_repo_metadata(target_repo)
         # Only look up an existing fork; do not create a public resource to test access.
         needs_fork = upstream.get("http_status") == 200 and _as_dict(_as_dict(upstream.get("data")).get("permissions")).get("push") is not True
-        fork = read_repo_metadata(actor + "/" + target_repo.split("/", 1)[1]) if needs_fork else {}
+        fork = read_repo_metadata(fork_repo) if needs_fork else {}
     result = classify_publication_path(target_repo, actor, upstream, fork)
     if execution_requested:
         result['execution'] = inspect_execution_environment(

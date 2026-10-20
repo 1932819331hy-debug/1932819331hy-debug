@@ -200,6 +200,50 @@ class ExecutionPreflightTests(unittest.TestCase):
         self.assertEqual(result['http_status'], 403)
         self.assertTrue(result['publication_recovery'])
 
+    def test_live_cli_uses_requested_renamed_fork_and_preserves_legacy_mode(self):
+        target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': False}}}
+        fork = {'http_status': 200, 'data': {'full_name': 'worker/renamed', 'fork': True,
+                'parent': {'full_name': 'upstream/project'}, 'permissions': {'push': True}}}
+        for extra in [[], self.live_args()]:
+            output = io.StringIO()
+            args = ['publication_preflight.py', '--repo', 'upstream/project', '--actor', 'worker',
+                    '--fork', 'worker/renamed', *extra]
+            with self.subTest(execution=bool(extra)), patch('sys.argv', args), \
+                    patch.object(preflight, 'read_repo_metadata', side_effect=[target, fork]) as reader, \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(preflight.main(), 0)
+                self.assertEqual(reader.call_args_list[1].args, ('worker/renamed',))
+                result = json.loads(output.getvalue())
+                self.assertEqual(result['delivery_repo'], 'worker/renamed')
+                self.assertFalse(result['pr_publication_verified'])
+                if extra:
+                    self.assertTrue(result['ready_candidate'])
+                else:
+                    self.assertNotIn('execution', result)
+
+    def test_requested_fork_name_does_not_bypass_fork_network_check(self):
+        target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': False}}}
+        fork = {'http_status': 200, 'data': {'full_name': 'worker/renamed', 'fork': True,
+                'parent': {'full_name': 'unrelated/project'}, 'permissions': {'push': True}}}
+        code, result = self.cli(self.live_args() + ['--fork', 'worker/renamed'], [target, fork])
+        self.assertEqual(code, 2)
+        self.assertFalse(result['ready_candidate'])
+        self.assertTrue(result['execution']['local_work_ready'])
+        self.assertEqual(result['status'], 'FORK_NETWORK_MISMATCH')
+
+    def test_fork_override_rejects_foreign_owner_invalid_names_and_imports_before_reads(self):
+        for fork in ['other/renamed', '../renamed', 'worker/renamed?ref=x', 'worker/..', 'worker/a/b']:
+            with self.subTest(fork=fork), contextlib.redirect_stderr(io.StringIO()), \
+                    patch.object(preflight, 'read_repo_metadata') as reader, \
+                    patch('sys.argv', ['preflight', '--repo', 'upstream/project', '--actor', 'worker', '--fork', fork]), \
+                    self.assertRaises(SystemExit) as error:
+                preflight.main()
+            self.assertEqual(error.exception.code, 2)
+            reader.assert_not_called()
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            self.cli(['--from-json', 'imported.json', '--fork', 'worker/renamed'], [])
+        self.assertEqual(error.exception.code, 2)
+
     def test_cli_writable_repo_does_not_mask_missing_execution_dependency(self):
         target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': True}}}
         code, result = self.cli(self.live_args() + ['--require-file', 'missing.lock'], [target])

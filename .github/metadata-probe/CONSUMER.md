@@ -250,6 +250,14 @@ environment ID is labeled caller context, not independently attested host identi
 Tests are not executed by this read-only preflight. Run the project's acceptance
 tests separately and retain their exact SHA, exit codes and logs.
 
+If the existing fork was renamed, add `--fork EXPECTED_LOGIN/RENAMED_REPOSITORY`
+to the live command. The helper validates the selector before network reads and
+fetches that existing repository through the same live `gh` channel when the
+upstream does not report push access. Ownership, actual fork status, upstream
+network and reported write access are still checked. A supplied name is never
+permission to create a fork or take over a branch. Publication-only live calls
+also accept this selector; `--from-json` cannot be combined with `--fork`.
+
 `execution.local_work_ready` is separate from `path_candidate_present`.
 `ready_candidate` requires both, while `pr_publication_verified` stays false until
 an actual authorized PR and remote HEAD readback. A missing fork or denied
