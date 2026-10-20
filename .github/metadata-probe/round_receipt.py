@@ -60,9 +60,14 @@ def work_result(work):
     return True
 
 
-def verify_round(raw, context):
+def verify_round(raw, context, *, cash_only=False):
     """Validate bounded due scope from the original writer; never grant authority."""
-    fields(context, 'schema_version round_id coverage tickets', 'CONTEXT_FIELDS')
+    require(type(cash_only) is bool, 'CASH_MODE')
+    has_leads = isinstance(context, dict) and 'monetary_leads' in context
+    cash_only = cash_only or has_leads
+    require(not cash_only or has_leads, 'CASH_CONTEXT_REQUIRED')
+    fields(context, 'schema_version round_id coverage tickets' +
+           (' monetary_leads' if has_leads else ''), 'CONTEXT_FIELDS')
     receipt = decode(raw)
     fields(receipt, 'schema_version round_id outcome tickets', 'RECEIPT_FIELDS')
     for value in (context, receipt):
@@ -78,6 +83,17 @@ def verify_round(raw, context):
         require(isinstance(ticket['repo'], str) and REPO.fullmatch(ticket['repo']), 'CANONICAL_REPO')
         require(type(ticket['eligible']) is bool and ticket['owner_state'] in ('CURRENT', 'EXTERNAL'), 'CANONICAL_OWNERSHIP')
         tickets[ticket['task_id']] = ticket
+    if cash_only:
+        leads = context['monetary_leads']
+        require(isinstance(leads, dict) and len(leads) <= 64, 'MONETARY_LEADS')
+        for task_id, lead in leads.items():
+            require(task_id in tickets, 'MONETARY_TASK_ID')
+            fields(lead, 'source_ref source_quote', 'MONETARY_LEAD_FIELDS')
+            require(text(lead['source_ref'], 4096) and text(lead['source_quote'], 4096),
+                    'MONETARY_LEAD_EVIDENCE')
+        for task_id, ticket in tickets.items():
+            if ticket['eligible'] and ticket['owner_state'] == 'CURRENT':
+                require(task_id in leads, 'MISSING_MONETARY_LEAD')
     reports = {}
     for report in sequence(receipt['tickets'], 64, 'RECEIPT_TICKETS'):
         fields(report, 'task_id work publication blockers', 'TICKET_RESULT_FIELDS')
@@ -139,6 +155,7 @@ def verify_round(raw, context):
     return {'status': 'REJECTED' if errors else 'VALIDATED', 'round_id': context['round_id'],
             'actual_started': started, 'upstream_submitted': submitted, 'blocked': blocked,
             'required_next': required, 'errors': sorted(set(errors)),
+            'cash_scope_enforced': cash_only, 'monetary_lead_attested': False,
             'execution_attested': False, 'dispatch_authorized': False, 'public_mutations': 0}
 
 
@@ -146,9 +163,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--context', type=Path, required=True)
     parser.add_argument('--receipt', type=Path, required=True)
+    parser.add_argument('--cash-only', action='store_true',
+                        help='Require canonical monetary lead context for current eligible tasks')
     args = parser.parse_args()
     try:
-        result = verify_round(read_bounded(args.receipt), decode(read_bounded(args.context)))
+        result = verify_round(read_bounded(args.receipt), decode(read_bounded(args.context)),
+                              cash_only=args.cash_only)
     except (OSError, ValueError, TypeError, KeyError, UnicodeError) as exc:
         reason = str(exc) if type(exc) is ValueError else type(exc).__name__
         print(json.dumps({'status': 'REJECTED', 'reason': reason}), file=sys.stderr)

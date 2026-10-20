@@ -33,8 +33,12 @@ before the current observation. Old, missing and future creation times do not
 qualify. This does not establish payment eligibility or authorize engineering.
 Compare event IDs with the canonical Page's processing records. Verify the
 original source, current task, eligibility, amount, policy and acceptance before
-creating/updating a ticket. The user permits ordinary valid contributions as
-well as paid work; a bounty label or confirmed amount is not an intake gate.
+creating/updating a ticket. Ordinary valid contributions may also be permitted,
+but must remain distinct from monetary engineering. A cash task needs an actual
+monetary lead from its original source or reward program; ordinary issue labels
+and token-saving measurements alone are not money evidence. Unknown amount,
+funding, payout eligibility, competition or assignment do not exclude a task
+with a monetary lead. A bounty label or confirmed amount is not required.
 
 For a real READY ticket, retain its original Builder/Publisher. Respect actual
 resources and dependencies without imposing an arbitrary task-count cap.
@@ -243,6 +247,24 @@ due scope and any gaps), and at most 64 `tickets`. Each context ticket has
 no due action need not be repeated. An empty due scope is allowed with explicit
 coverage. Coverage and current ownership remain the writer's responsibility;
 a caller omitting a task from both inputs cannot be detected by this helper.
+
+For monetary engineering, invoke the same helper with `--cash-only`. Add a
+`monetary_leads` object to the context, keyed by each selected eligible CURRENT
+task ID. Each value has exactly `source_ref` (the canonical original monetary
+promise or reward-program reference) and `source_quote` (its monetary wording).
+Missing lead context or a selected current task without a lead is rejected,
+including an ordinary task stopped by an unrelated tool error. A supplied
+`monetary_leads` object always enables this check, even without the flag.
+There is no amount, currency, funded-state, assignment or geography test.
+
+Legacy ordinary-work calls remain supported and return
+`cash_scope_enforced: false`; they cannot establish monetary coverage. Cash
+calls return `cash_scope_enforced: true` only for this consistency contract.
+Both return `monetary_lead_attested: false`: source quotes are caller assertions,
+not proof of a real promise, eligibility, funding, execution or eventual payment.
+The writer must still verify the original source and include every due monetary
+task across bounded batches. Record permitted ordinary contributions separately;
+their progress or blockers do not complete or block independent monetary work.
 
 The **receipt** has `schema_version`, matching `round_id`, `outcome`, and
 `tickets`. Every context ticket must have one result with `task_id`, `work`,

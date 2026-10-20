@@ -160,6 +160,88 @@ class RoundReceiptTests(unittest.TestCase):
         receipt['outcome'] = 'COMPLETED'
         self.assertEqual(self.validate(context, receipt)['status'], 'VALIDATED')
 
+    def test_cash_only_requires_canonical_monetary_context(self):
+        context, receipt = fixture()
+        with self.assertRaisesRegex(ValueError, 'CASH_CONTEXT_REQUIRED'):
+            self.mod.verify_round(json.dumps(receipt).encode(), context, cash_only=True)
+
+    def test_cash_only_cannot_select_an_ordinary_issue_without_a_money_lead(self):
+        context, receipt = fixture()
+        context['monetary_leads'] = {}
+        receipt['tickets'][0]['work'] = {'kind': 'READ', 'evidence': 'Ordinary issue inspected; no money lead'}
+        receipt['tickets'][0]['blockers'] = [{'step': 'WORK', 'tool': 'gh api',
+            'error': 'not authenticated', 'evidence': 'Private failed read log'}]
+        receipt['outcome'] = 'BLOCKED'
+        with self.assertRaisesRegex(ValueError, 'MISSING_MONETARY_LEAD'):
+            self.mod.verify_round(json.dumps(receipt).encode(), context, cash_only=True)
+        # A caller cannot silently downgrade supplied cash context by omitting the flag.
+        with self.assertRaisesRegex(ValueError, 'MISSING_MONETARY_LEAD'):
+            self.validate(context, receipt)
+
+    def test_cash_lead_does_not_require_confirmed_amount_funding_or_payout(self):
+        for quote in ('$0.99 USDC advertised; funding unknown',
+                      '1500 CHF reward; payout eligibility unknown',
+                      'Proposed monetary reward; amount and funding TBD'):
+            with self.subTest(quote=quote):
+                context, receipt = fixture()
+                context['monetary_leads'] = {'org/repo#1': {
+                    'source_ref': 'https://github.com/org/repo/issues/1', 'source_quote': quote}}
+                result = self.mod.verify_round(json.dumps(receipt).encode(), context, cash_only=True)
+                self.assertEqual(result['status'], 'VALIDATED')
+                self.assertTrue(result['cash_scope_enforced'])
+                self.assertFalse(result['monetary_lead_attested'])
+                self.assertFalse(result['execution_attested'])
+
+    def test_cash_leads_are_bounded_typed_and_bound_to_canonical_task_ids(self):
+        good = {'org/repo#1': {'source_ref': 'Original issue readback', 'source_quote': 'Advertised cash reward'}}
+        bad = [None, [], True, {'different-task': good['org/repo#1']},
+               {'org/repo#1': {'source_ref': '', 'source_quote': 'cash'}},
+               {'org/repo#1': {'source_ref': 'original', 'source_quote': ''}},
+               {'org/repo#1': {'source_ref': 'original', 'source_quote': 'cash', 'approved': True}}]
+        for leads in bad:
+            with self.subTest(leads=leads):
+                context, receipt = fixture()
+                context['monetary_leads'] = leads
+                with self.assertRaises(ValueError):
+                    self.mod.verify_round(json.dumps(receipt).encode(), context, cash_only=True)
+
+    def test_cash_external_owner_observation_does_not_need_a_money_lead(self):
+        context, receipt = fixture()
+        context['tickets'][0]['owner_state'] = 'EXTERNAL'
+        context['monetary_leads'] = {}
+        receipt['tickets'][0]['work'] = {'kind': 'READ', 'evidence': 'External owner status only'}
+        result = self.mod.verify_round(json.dumps(receipt).encode(), context, cash_only=True)
+        self.assertEqual(result['status'], 'VALIDATED')
+        self.assertEqual(result['actual_started'], [])
+
+    def test_legacy_ordinary_receipts_do_not_establish_cash_scope(self):
+        context, receipt = fixture()
+        result = self.validate(context, receipt)
+        self.assertEqual(result['status'], 'VALIDATED')
+        self.assertFalse(result['cash_scope_enforced'])
+        self.assertFalse(result['monetary_lead_attested'])
+
+    def test_cash_cli_is_strict_but_legacy_ordinary_work_remains_usable(self):
+        context, receipt = fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'receipt.json').write_text(json.dumps(receipt))
+            def run(*extra):
+                (root / 'context.json').write_text(json.dumps(context))
+                return subprocess.run([sys.executable, str(MODULE), '--context', str(root / 'context.json'),
+                    '--receipt', str(root / 'receipt.json'), *extra], capture_output=True, text=True)
+            result = run('--cash-only')
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(json.loads(result.stderr)['reason'], 'CASH_CONTEXT_REQUIRED')
+            result = run()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(json.loads(result.stdout)['cash_scope_enforced'])
+            context['monetary_leads'] = {'org/repo#1': {
+                'source_ref': 'Original monetary promise', 'source_quote': 'Cash reward, amount TBD'}}
+            result = run('--cash-only')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads(result.stdout)['cash_scope_enforced'])
+
     def test_cli_json_escape_survives_terminal_encoding(self):
         context, receipt = fixture()
         context['round_id'] = receipt['round_id'] = '\ud800'
