@@ -18,8 +18,14 @@ snapshot; `events.jsonl` holds every cached observation. `event_coverage` and
 `validation_coverage` report truncation. A missing artifact, broken receipt
 chain, failed source or stale snapshot is a coverage gap, not an empty queue.
 
-Ignore `LEGACY_UNVERIFIED`, `BASELINE_UNTRIAGED` and
-`FIRST_OBSERVED_UNVERIFIED` for automatic engineering. `VALIDATION_REQUIRED`
+Ignore `LEGACY_UNVERIFIED` for automatic engineering. `BASELINE_UNTRIAGED` and
+`FIRST_OBSERVED_UNVERIFIED` need qualification against the live source and Page;
+they are not evidence that an opportunity is ineligible. `qualification_handoff`
+exposes these alongside `VALIDATION_REQUIRED` from explicitly marked discovery
+sources. Its bounded projection preserves statuses and never grants dispatch or
+publication authority. Use its coverage and `events.jsonl` when truncated, and
+Page source/event processing records to skip consumed observations. The projection
+limit is a log bound, not a task intake limit. `VALIDATION_REQUIRED`
 means a meaningful observed delta needs verification; it is not a READY ticket.
 A first sight can also require validation when a funded/bounty listing has an
 authoritative creation time after its established representation baseline and
@@ -27,9 +33,11 @@ before the current observation. Old, missing and future creation times do not
 qualify. This does not establish payment eligibility or authorize engineering.
 Compare event IDs with the canonical Page's processing records. Verify the
 original source, current task, eligibility, amount, policy and acceptance before
-creating/updating a ticket. Deep-check at most two new candidates per pass.
+creating/updating a ticket. The user permits ordinary valid contributions as
+well as paid work; a bounty label or confirmed amount is not an intake gate.
 
-For a real READY ticket, retain its original Builder/Publisher and WIP limits.
+For a real READY ticket, retain its original Builder/Publisher. Respect actual
+resources and dependencies without imposing an arbitrary task-count cap.
 Record a worker as started only after observing a real worker run with its
 repository, branch and tools. Bind test results to the exact commit. Perform
 required independent review and publish through the authorized Publisher only.

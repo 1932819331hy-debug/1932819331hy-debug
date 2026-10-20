@@ -54,6 +54,24 @@ def handoff_stages(receipt):
     return stages
 
 
+def qualification_handoff(events, manifest, limit=20):
+    """Expose discovery observations for Page triage, never as executable work."""
+    sources = {source["id"] for source in manifest["sources"]
+               if source.get("qualification_source") is True}
+    candidates = [event for event in events
+                  if event.get("source_id") in sources
+                  and event.get("schema_version") == 2
+                  and event.get("processing_status") in (
+                      "BASELINE_UNTRIAGED", "FIRST_OBSERVED_UNVERIFIED",
+                      "VALIDATION_REQUIRED")]
+    return {"observations": [dict(event, qualification_required=True,
+                                  dispatch_allowed=False, publish_allowed=False)
+                              for event in candidates[:limit]],
+            "coverage": {"total": len(candidates), "returned": min(limit, len(candidates)),
+                         "truncated": len(candidates) > limit,
+                         "full_snapshot": "events.jsonl", "queue_authority": "NONE"}}
+
+
 def save_json(target, value):
     temporary = target.with_suffix(target.suffix + ".tmp")
     temporary.write_text(json.dumps(value, sort_keys=True) + "\n")
@@ -106,6 +124,7 @@ def main():
     temporary.replace(state / "events.jsonl")
     reviews = review_metadata.run(state)
     output = {"receipt": receipt, "derived_events": events, "event_coverage": coverage,
+              "qualification_handoff": qualification_handoff(all_events, manifest),
               "reviews": reviews, "health": health, "health_incidents": incidents,
               "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
     save_json(state / "latest.json", output)
