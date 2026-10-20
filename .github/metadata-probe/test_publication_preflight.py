@@ -4,6 +4,7 @@ import tempfile
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 import publication_preflight as preflight
@@ -218,6 +219,36 @@ class ExecutionPreflightTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
             self.cli(self.live_args() + ['--from-json', 'imported.json'], [])
         self.assertEqual(error.exception.code, 2)
+
+    def test_inherited_git_checkout_selectors_fail_closed(self):
+        with patch.dict(os.environ, {'GIT_DIR': str(self.root / '.git'), 'GIT_WORK_TREE': str(self.root)}):
+            result = self.inspect()
+        self.assertFalse(result['local_work_ready'])
+        self.assertIn('GIT_ENVIRONMENT_OVERRIDE', [b['code'] for b in result['blockers']])
+
+    def test_relative_path_tool_is_resolved_from_task_checkout(self):
+        launcher = self.root / 'launcher'; launcher.mkdir()
+        (launcher / 'bin').mkdir()
+        tool = launcher / 'bin/fixture-only-tool'
+        tool.write_text('#!/bin/sh\nexit 0\n'); tool.chmod(0o700)
+        previous = Path.cwd()
+        try:
+            os.chdir(launcher)
+            with patch.dict(os.environ, {'PATH': 'bin:' + os.environ['PATH']}):
+                self.assertFalse(self.inspect(required_tools=['fixture-only-tool'])['local_work_ready'])
+            with patch.dict(os.environ, {'PATH': str(launcher / 'bin') + ':' + os.environ['PATH']}):
+                self.assertTrue(self.inspect(required_tools=['fixture-only-tool'])['local_work_ready'])
+        finally:
+            os.chdir(previous)
+
+    def test_symlink_loop_and_nul_path_produce_recoverable_blockers(self):
+        (self.root / 'loop.py').symlink_to('loop.py')
+        for entry in ['loop.py', 'bad\0path']:
+            with self.subTest(entry=entry):
+                result = self.inspect(test_entries=[entry])
+                self.assertFalse(result['local_work_ready'])
+                self.assertEqual(result['blockers'][0]['code'], 'TEST_ENTRY_UNAVAILABLE')
+                self.assertTrue(result['blockers'][0]['recovery'])
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import json
+import os
 import platform
 import re
 import shutil
@@ -141,8 +142,17 @@ def inspect_execution_environment(*, workdir, expected_head, environment_id, act
             block('READ_IDENTITY_UNAVAILABLE', 'Restore the existing authorized gh read channel on this host; do not create credentials.')
         elif identity['login'].casefold() != actor.casefold():
             block('READ_IDENTITY_MISMATCH', 'Use the existing authorized identity for this task; do not change account permissions.')
-        root = Path(workdir).resolve()
+        try:
+            root = Path(workdir).resolve()
+        except (OSError, ValueError, RuntimeError):
+            block('CHECKOUT_UNAVAILABLE', 'Select an accessible existing checkout root without a symlink loop.')
+            result['completed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            return result
         result['workdir'] = str(root)
+        selectors = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
+                     'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG_COUNT')
+        if any(os.environ.get(key) for key in selectors):
+            block('GIT_ENVIRONMENT_OVERRIDE', 'Run from the normal task environment without inherited Git checkout/object/config selectors; do not alter global configuration.')
         try:
             proc = subprocess.run(['git', '-C', str(root), 'rev-parse', '--show-toplevel', 'HEAD'],
                                   capture_output=True, text=True, timeout=20, check=False)
@@ -156,15 +166,20 @@ def inspect_execution_environment(*, workdir, expected_head, environment_id, act
         except (OSError, subprocess.TimeoutExpired):
             block('CHECKOUT_UNAVAILABLE', 'Restore the existing checkout and git executable on this host.')
         for tool in required_tools:
-            result['tools'][tool] = shutil.which(tool)
+            # exec searches relative PATH entries from its task working directory.
+            task_path = os.pathsep.join(str(root / entry) for entry in os.environ.get('PATH', os.defpath).split(os.pathsep))
+            result['tools'][tool] = shutil.which(tool, path=task_path)
             if not result['tools'][tool]:
                 block('DEPENDENCY_MISSING', 'Install the project-pinned dependency using existing resources, then recheck on this host.', tool)
         for paths, key in [(required_files, 'files'), (test_entries, 'test_entries')]:
             for entry in paths:
                 valid = isinstance(entry, str) and bool(entry.strip()) and not Path(entry).is_absolute()
                 if valid:
-                    resolved = (root / entry).resolve()
-                    valid = resolved.is_relative_to(root) and resolved.is_file()
+                    try:
+                        resolved = (root / entry).resolve()
+                        valid = resolved.is_relative_to(root) and resolved.is_file() and os.access(resolved, os.R_OK)
+                    except (OSError, ValueError, RuntimeError):
+                        valid = False
                 result[key][str(entry)] = bool(valid)
                 if not valid:
                     block('TEST_ENTRY_UNAVAILABLE' if key == 'test_entries' else 'DEPENDENCY_FILE_UNAVAILABLE',
