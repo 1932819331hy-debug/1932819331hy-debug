@@ -52,6 +52,38 @@ class CloudReceiptTests(unittest.TestCase):
         self.assertEqual(stages["WORKER_STARTED"]["status"], "WORKER_TRIGGER_BLOCKED")
         self.assertEqual(stages["RECEIPT_PERSISTED"]["status"], "PENDING_CANONICAL_PAGE_WRITER")
 
+    def test_first_observations_reach_qualification_without_dispatch_authority(self):
+        module = self.module()
+        manifest = {"sources": [{"id": "issues", "qualification_source": True},
+                                 {"id": "own-prs"}]}
+        events = [{"event_id": str(index), "source_id": "issues", "schema_version": 2,
+                   "processing_status": status, "dispatch_allowed": True}
+                  for index, status in enumerate(("BASELINE_UNTRIAGED",
+                      "FIRST_OBSERVED_UNVERIFIED", "VALIDATION_REQUIRED"))]
+        events += [{"source_id": "own-prs", "schema_version": 2,
+                    "processing_status": "VALIDATION_REQUIRED"},
+                   {"source_id": "issues", "processing_status": "LEGACY_UNVERIFIED"}]
+        result = module.qualification_handoff(events, manifest, limit=2)
+        self.assertEqual([x["event_id"] for x in result["observations"]], ["0", "1"])
+        self.assertEqual(result["coverage"]["total"], 3)
+        self.assertTrue(result["coverage"]["truncated"])
+        self.assertEqual(result["coverage"]["full_snapshot"], "events.jsonl")
+        for observation in result["observations"]:
+            self.assertTrue(observation["qualification_required"])
+            self.assertFalse(observation["dispatch_allowed"])
+            self.assertFalse(observation["publish_allowed"])
+        self.assertEqual(events[0]["dispatch_allowed"], True)
+
+    def test_manifest_explicitly_exposes_repository_and_reward_discovery(self):
+        module = self.module()
+        manifest = json.loads(Path(__file__).with_name("sources.json").read_text())
+        qualified = {x["id"] for x in manifest["sources"] if x.get("qualification_source")}
+        self.assertEqual(qualified, {"squash-fast", "cash-discovery-partitions",
+                                     "known-repository-issues"})
+        result = module.qualification_handoff([], manifest)
+        self.assertEqual(result["observations"], [])
+        self.assertFalse(result["coverage"]["truncated"])
+
 
 if __name__ == "__main__":
     unittest.main()

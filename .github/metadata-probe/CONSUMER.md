@@ -18,8 +18,14 @@ snapshot; `events.jsonl` holds every cached observation. `event_coverage` and
 `validation_coverage` report truncation. A missing artifact, broken receipt
 chain, failed source or stale snapshot is a coverage gap, not an empty queue.
 
-Ignore `LEGACY_UNVERIFIED`, `BASELINE_UNTRIAGED` and
-`FIRST_OBSERVED_UNVERIFIED` for automatic engineering. `VALIDATION_REQUIRED`
+Ignore `LEGACY_UNVERIFIED` for automatic engineering. `BASELINE_UNTRIAGED` and
+`FIRST_OBSERVED_UNVERIFIED` need qualification against the live source and Page;
+they are not evidence that an opportunity is ineligible. `qualification_handoff`
+exposes these alongside `VALIDATION_REQUIRED` from explicitly marked discovery
+sources. Its bounded projection preserves statuses and never grants dispatch or
+publication authority. Use its coverage and `events.jsonl` when truncated, and
+Page source/event processing records to skip consumed observations. The projection
+limit is a log bound, not a task intake limit. `VALIDATION_REQUIRED`
 means a meaningful observed delta needs verification; it is not a READY ticket.
 A first sight can also require validation when a funded/bounty listing has an
 authoritative creation time after its established representation baseline and
@@ -27,9 +33,11 @@ before the current observation. Old, missing and future creation times do not
 qualify. This does not establish payment eligibility or authorize engineering.
 Compare event IDs with the canonical Page's processing records. Verify the
 original source, current task, eligibility, amount, policy and acceptance before
-creating/updating a ticket. Deep-check at most two new candidates per pass.
+creating/updating a ticket. The user permits ordinary valid contributions as
+well as paid work; a bounty label or confirmed amount is not an intake gate.
 
-For a real READY ticket, retain its original Builder/Publisher and WIP limits.
+For a real READY ticket, retain its original Builder/Publisher. Respect actual
+resources and dependencies without imposing an arbitrary task-count cap.
 Record a worker as started only after observing a real worker run with its
 repository, branch and tools. Bind test results to the exact commit. Perform
 required independent review and publish through the authorized Publisher only.
@@ -181,11 +189,105 @@ separate; no automatic human acknowledgement or new notification channel exists.
 The cron is a ten-minute target, not a platform delivery guarantee. Measure
 actual schedule runs and source read times. New-source research remains a
 bounded attempt at most every two hours; full WIP does not stop lightweight
-known-source discovery. Do not add a fifth manifest source without accounting
-for the bounded per-pass source budget.
+known-source discovery.
+
+`max_source_reads` in `sources.json` is a positive integer network-read budget
+(default 4), independent of candidate or task capacity. Only due sources consume
+it. Due sources rotate by their persisted oldest `last_checked` timestamp, with
+manifest order breaking ties; failed attempts also update that timestamp while
+preserving their successful cursor and retry backoff. Sources waiting for their
+interval/backoff consume no reads. `source_budget.deferred_source_ids` names due
+sources left unread in this pass; `processed` counts attempted network reads.
+Deferred due sources produce `PARTIAL_BUDGET` / a `PARTIAL` receipt. The next pass
+can serve them even while earlier manifest sources are not due. Each selected
+source reads one partition/page, retaining the existing exact-page validators.
+
+`known-repository-issues` reads open issues directly through GitHub's repository
+issues API for Go-Hybrid, dataprof and rtk, without a bounty-label requirement or
+the search API's 1,000-result cap. The repository API also returns PRs; the probe
+filters them from candidate observations but counts them for page continuation.
+A full page means there may be another page, including when every row was a PR.
+No snapshot of a changing paginated listing guarantees complete coverage; inspect
+partition/page cursors, timestamps and failed reads before inferring absence.
+
+These ordinary issue observations retain `amount_minor: null`,
+`amount_status: UNKNOWN`, `qualification_required: true`, and
+`cash_opportunity_verified: false`. Repository membership establishes no funding
+or contribution eligibility. They retain baseline/unverified classification and
+`dispatch_allowed: false` / `publish_allowed: false`; the existing controller
+must verify current policy, issue scope and acceptance before engineering.
 
 An incomplete review attempt is retained separately from the last complete
 `reviews.json`. Its retry state preserves pending cursors. Fetch the complete
 snapshot file when a log reports `NOT_DUE`; do not treat an empty projection as
 an empty review list. Source failures keep their prior verified cursor; the
 workflow preserves recoverable cache and artifacts even when a read fails.
+
+## Selected engineering round receipt
+
+The original canonical writer can run `python3 round_receipt.py --context
+context.json --receipt receipt.json` before closing its existing round. This
+helper reads files only; it does not execute commands, dispatch work, store a
+ledger, grant authority, publish, or save a Page. Retain its output in the same
+canonical round and perform the normal conditional save/readback. It is not
+wired into the probe or scheduler. The existing writer must actually invoke it;
+adding the file alone does not establish live enforcement or Page persistence.
+
+Both inputs are bounded UTF-8 JSON (256 KiB each), schema version 1. Duplicate
+keys, unknown fields, duplicate task IDs and ambiguous results are rejected.
+Fresh **context**, selected by the original writer from the existing Page, has
+`schema_version`, `round_id`, `coverage` (a concrete reference/explanation of the
+due scope and any gaps), and at most 64 `tickets`. Each context ticket has
+`task_id`, upstream `repo` (`owner/name`), `eligible` (boolean), and `owner_state`
+(`CURRENT` or `EXTERNAL`). Select the current due scope; historical tickets with
+no due action need not be repeated. An empty due scope is allowed with explicit
+coverage. Coverage and current ownership remain the writer's responsibility;
+a caller omitting a task from both inputs cannot be detected by this helper.
+
+The **receipt** has `schema_version`, matching `round_id`, `outcome`, and
+`tickets`. Every context ticket must have one result with `task_id`, `work`,
+`publication` (null or an object), and `blockers` (possibly empty). `work` is:
+
+- Observation only: `kind` is `NONE`, `READ`, `QUALIFICATION`, or `SETUP`, with
+  `evidence` reference. These activities never count as engineering started.
+- Task execution: `kind` is `COMMAND` or `CHANGE`, plus exact 40-character
+  `head_sha`, `evidence` reference, `checks`, and `result` (`IN_PROGRESS`, `PASS`,
+  or `FAIL`). A command has `argv`; a change has nonempty relative `paths`.
+  Checks have `argv`, actual `exit_code`, matching `tested_sha`, and `log_ref`.
+  The command's own argv must have a matching check/result. PASS needs at least
+  one check and all exits zero; FAIL needs a nonzero check.
+  A failed real task command still counts as started. Source/search/setup
+  commands must use their observation classification even when a shell ran.
+
+`publication`, when present, has `kind` (`UPSTREAM_PR` or
+`FORK_VALIDATION_PR`), `repo`, an exact GitHub `/owner/repo/pull/NUMBER` `url`,
+and `head_sha` matching the work. Upstream delivery requires the canonical
+upstream repository; a fork validation PR never populates `upstream_submitted`.
+A fork validation PR can coexist with blocked upstream publication.
+
+Each blocker has `step` (`WORK` or `PUBLICATION`), concrete `tool`, `error`, and
+`evidence` reference. It applies only to that step of that ticket. For example,
+`PUBLICATION / gh pr create / HTTP 403 / log reference` cannot excuse missing
+independent code/test progress. A missing supported executable entrance can be
+reported as a WORK blocker naming the attempted tool and actual error. Preserve
+existing external ownership; execution or publication on EXTERNAL/ineligible
+tickets is rejected. The helper never asks for renewed approval for authorized
+work and never authorizes duplicating an external owner's task.
+
+Outputs include `actual_started`, `upstream_submitted`, `blocked`, and
+`required_next`. Missing due engineering without a WORK blocker returns REJECTED
+and exit 2. `IN_PROGRESS` can validly record real partial work; `BLOCKED` needs a
+concrete blocker. `COMPLETED` claims upstream delivery with passing exact-head
+checks for every selected eligible current-owner ticket and otherwise returns
+REJECTED/exit 2. A valid blocked receipt preserves the blocker and next step;
+exit 0 does not mean delivered. Malformed input also exits 2. Focused tests in
+`test_round_receipt.py` contain complete minimal context/receipt examples.
+
+This establishes **consistency, not truth or attestation**. Command arguments,
+paths, URLs and logs are data references and are never executed or fetched. The
+helper cannot prove a command ran, a diff is real, a log is authentic, a PR exists,
+or a test checks the acceptance criteria. The original writer must classify
+activities honestly, verify actual source/check/remote evidence, and use the
+existing ownership, exact-commit review and publication gates. A receipt SHA
+alone, a fork PR, source reading, or a successful validation invocation is never
+proof of natural upstream delivery or canonical Page persistence.

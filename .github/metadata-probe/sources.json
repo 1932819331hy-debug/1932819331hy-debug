@@ -4,6 +4,7 @@
   "sources": [
     {
       "id": "squash-fast",
+      "qualification_source": true,
       "kind": "squash",
       "url": "https://app.squash.ci/jobs.json",
       "interval": 600,
@@ -32,6 +33,7 @@
     },
     {
       "id": "cash-discovery-partitions",
+      "qualification_source": true,
       "kind": "github_search",
       "url": "https://api.github.com/search/issues?per_page=30&sort=updated&order=desc&q=is%3Aissue+is%3Aopen+label%3Abounty+updated%3A%3E%3D2026-10-18",
       "urls": [
@@ -42,8 +44,22 @@
       ],
       "interval": 3600,
       "limit": 30
+    },
+    {
+      "id": "known-repository-issues",
+      "qualification_source": true,
+      "kind": "github_issues",
+      "url": "https://api.github.com/repos/limitlessprojects/Go-Hybrid/issues?state=open&sort=updated&direction=desc&per_page=30",
+      "urls": [
+        "https://api.github.com/repos/limitlessprojects/Go-Hybrid/issues?state=open&sort=updated&direction=desc&per_page=30",
+        "https://api.github.com/repos/AndreaBozzo/dataprof/issues?state=open&sort=updated&direction=desc&per_page=30",
+        "https://api.github.com/repos/rtk-ai/rtk/issues?state=open&sort=updated&direction=desc&per_page=30"
+      ],
+      "interval": 3600,
+      "limit": 30
     }
   ],
   "canonical_page": "PRIVATE_LEDGER_REFERENCE_NOT_EXPORTED",
-  "executor_delivery": "WORKER_TRIGGER_BLOCKED"
+  "executor_delivery": "WORKER_TRIGGER_BLOCKED",
+  "max_source_reads": 4
 }
