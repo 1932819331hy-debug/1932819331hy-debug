@@ -89,7 +89,8 @@ def verify_round(raw, context, *, cash_only=False):
         for task_id, lead in leads.items():
             require(task_id in tickets, 'MONETARY_TASK_ID')
             fields(lead, 'source_ref source_quote', 'MONETARY_LEAD_FIELDS')
-            require(text(lead['source_ref'], 4096) and text(lead['source_quote'], 4096),
+            require(all(text(lead[key], 4096) and lead[key].strip()
+                        for key in ('source_ref', 'source_quote')),
                     'MONETARY_LEAD_EVIDENCE')
         for task_id, ticket in tickets.items():
             if ticket['eligible'] and ticket['owner_state'] == 'CURRENT':

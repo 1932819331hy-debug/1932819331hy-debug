@@ -197,6 +197,8 @@ class RoundReceiptTests(unittest.TestCase):
         bad = [None, [], True, {'different-task': good['org/repo#1']},
                {'org/repo#1': {'source_ref': '', 'source_quote': 'cash'}},
                {'org/repo#1': {'source_ref': 'original', 'source_quote': ''}},
+               {'org/repo#1': {'source_ref': '   ', 'source_quote': 'cash'}},
+               {'org/repo#1': {'source_ref': 'original', 'source_quote': '\u00a0 \u2003'}},
                {'org/repo#1': {'source_ref': 'original', 'source_quote': 'cash', 'approved': True}}]
         for leads in bad:
             with self.subTest(leads=leads):
