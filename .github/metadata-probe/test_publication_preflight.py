@@ -244,6 +244,14 @@ class ExecutionPreflightTests(unittest.TestCase):
             self.cli(['--from-json', 'imported.json', '--fork', 'worker/renamed'], [])
         self.assertEqual(error.exception.code, 2)
 
+    def test_explicit_empty_fork_cannot_bypass_live_import_mutual_exclusion(self):
+        imported = self.root / 'metadata.json'
+        imported.write_text(json.dumps({'target_repo': 'upstream/project', 'actor': 'worker',
+            'upstream': {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': True}}}, 'fork': {}}))
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            self.cli(['--from-json', str(imported), '--fork', ''], [])
+        self.assertEqual(error.exception.code, 2)
+
     def test_cli_writable_repo_does_not_mask_missing_execution_dependency(self):
         target = {'http_status': 200, 'data': {'full_name': 'upstream/project', 'permissions': {'push': True}}}
         code, result = self.cli(self.live_args() + ['--require-file', 'missing.lock'], [target])

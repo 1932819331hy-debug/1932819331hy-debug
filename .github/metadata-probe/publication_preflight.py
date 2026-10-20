@@ -202,7 +202,7 @@ def main():
     parser.add_argument('--require-file', action='append', default=[])
     parser.add_argument('--test-entry', action='append', default=[])
     args = parser.parse_args()
-    if args.fork and args.from_json:
+    if args.fork is not None and args.from_json:
         parser.error('--fork selects a live lookup and cannot be combined with --from-json metadata.')
     execution_requested = args.workdir is not None or args.expected_head is not None or args.environment_id is not None or bool(args.require_tool or args.require_file or args.test_entry)
     if execution_requested and (args.from_json or args.workdir is None):
