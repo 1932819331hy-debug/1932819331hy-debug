@@ -205,6 +205,22 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(marker.exists())
         self.assertEqual((self.target / 'note.txt').read_bytes(), b'candidate\n')
 
+    def test_inherited_git_index_cannot_modify_another_workspace(self):
+        cp, ctx = self.fixture()
+        root = Path(self.case.name)
+        external_index = root / 'unrelated.index'
+        env = dict(os.environ, GIT_INDEX_FILE=str(external_index))
+        subprocess.run(['git', '-C', str(self.source), 'read-tree', 'HEAD~1'], env=env, check=True)
+        before = external_index.read_bytes()
+        (root / 'checkpoint.json').write_bytes(raw(cp))
+        (root / 'context.json').write_bytes(raw(ctx))
+        proc = subprocess.run([sys.executable, str(MODULE), '--checkpoint', str(root / 'checkpoint.json'),
+                               '--context', str(root / 'context.json'), '--target', str(self.target)],
+                              env=env, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(external_index.read_bytes(), before)
+        self.assertTrue((self.target / '.git/index').is_file())
+
 
 if __name__ == '__main__':
     unittest.main()

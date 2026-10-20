@@ -21,6 +21,10 @@ CHECKPOINT_KEYS = set(IDENTITY) | {'schema_version', 'checkpoint_id', 'tree_sha'
                                 'checkpoint_kind', 'bundle_base64', 'bundle_sha256'}
 CONTEXT_KEYS = set(IDENTITY) | {'checkpoint_sha256', 'step_id', 'step_kind', 'step_state',
                              'completed_checkpoint_sha256', 'resume_authorized'}
+GIT_REPOSITORY_ENV = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
+                      'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+                      'GIT_NAMESPACE', 'GIT_SHALLOW_FILE', 'GIT_QUARANTINE_PATH',
+                      'GIT_REPLACE_REF_BASE', 'GIT_PREFIX', 'GIT_INTERNAL_SUPER_PREFIX'}
 
 
 def inspect_checkpoint(raw, context):
@@ -69,9 +73,12 @@ def inspect_checkpoint(raw, context):
 
 def git(*args):
     # Local bundle transport only, including any accidental lazy object reads.
+    # Isolate repository routing in this child process. Normal authentication,
+    # proxies, config and hook policy remain inherited; no global settings change.
+    env = {key: value for key, value in os.environ.items() if key not in GIT_REPOSITORY_ENV}
     try:
         proc = subprocess.run(['git', '-c', 'protocol.allow=never', '-c', 'protocol.file.allow=always', *map(str, args)],
-                              capture_output=True, timeout=30, check=False)
+                              capture_output=True, timeout=30, check=False, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError('GIT_EXECUTION_UNAVAILABLE') from exc
     require(proc.returncode == 0, 'GIT_OPERATION_FAILED')
