@@ -88,6 +88,7 @@ class WorkerReportTests(unittest.TestCase):
         context["accepted_reports"][report["report_id"]] = context["report_sha256"]
         result = self.verify(report, context)
         self.assertEqual(result["status"], "ALREADY_CONSUMED")
+        self.assertEqual(result["page_acknowledgement"], "NOT_REQUIRED_ALREADY_CONSUMED")
 
     def test_duplicate_conflicting_report_rejected(self):
         report, context = fixture()
@@ -97,7 +98,7 @@ class WorkerReportTests(unittest.TestCase):
 
     def test_duplicate_evidence_and_bad_paths_rejected(self):
         self.rejected_mutation(lambda report: report["evidence"].append(copy.deepcopy(report["evidence"][0])))
-        for path in ("../escape", "/absolute", "a/../b", "a\\b", ".git/hooks/pre-commit", "a//b", "a/./b"):
+        for path in (".", "../escape", "/absolute", "a/../b", "a\\b", ".git/hooks/pre-commit", "a//b", "a/./b"):
             with self.subTest(path=path):
                 self.rejected_mutation(lambda report: report["evidence"][0].update(path=path))
 

@@ -47,7 +47,7 @@ def safe_path(value):
     if not text(value) or "\\" in value:
         return False
     path = PurePosixPath(value)
-    return (not path.is_absolute() and str(path) == value
+    return (bool(path.parts) and not path.is_absolute() and str(path) == value
             and all(part not in (".", "..", ".git") for part in path.parts))
 
 
@@ -105,7 +105,7 @@ def verify_report(raw, context):
             "reported_checks": checks, "evidence": evidence_metadata,
             "dispatch_authorized": False, "test_execution_attested": False,
             "natural_delivery_attested": False, "public_mutations": 0,
-            "page_acknowledgement": "REQUIRED_AFTER_FRESH_CONDITIONAL_SAVE_AND_READBACK"}
+            "page_acknowledgement": "NOT_REQUIRED_ALREADY_CONSUMED" if previous else "REQUIRED_AFTER_FRESH_CONDITIONAL_SAVE_AND_READBACK"}
 
 
 def read_bounded(path):
