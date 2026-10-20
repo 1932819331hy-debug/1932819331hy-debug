@@ -290,4 +290,39 @@ class ProbeTests(unittest.TestCase):
    self.assertEqual(source['coverage']['scope'],'EXACT_SOURCE_QUERY_PARTITION_PAGE')
    self.assertEqual(source['coverage']['checked_at'],'1970-01-01T00:16:40+00:00')
    self.assertEqual(source['cursor']['rotation'],1)
+
+ def test_rewarded_and_unfunded_labels_do_not_consume_fresh_validation(self):
+  # Open status alone is not proof that an already-paid issue is claimable.
+  src=dict(self.source,kind='github_search')
+  cached={'last_success':1000}
+  for label in ('Rewarded','💰 Rewarded','Paid','Unfunded','not funded','unpaid','Bounty already rewarded'):
+   with self.subTest(label=label):
+    item={'state':'open','created_at':'1970-01-01T00:20:00Z',
+          'funding_labels':['💎 bounty',label.casefold()]}
+    self.assertFalse(self.p.fresh_candidate(src,item,cached,1601))
+  self.assertTrue(self.p.fresh_candidate(src,{
+   'state':'open','created_at':'1970-01-01T00:20:00Z','funding_labels':['💎 bounty']
+  },cached,1601))
+ def test_rewarded_first_sighting_is_retained_and_later_change_triggers_validation(self):
+  src=dict(self.source,kind='github_search')
+  existing=self.gh_item(labels=[{'name':'💎 Bounty'}],
+                        created_at='1970-01-01T00:16:30Z')
+  self.run_probe(self.gh_response([existing]),now=1000,sources=[src])
+  awarded=self.gh_item(id=11,number=2,html_url='https://github.com/a/b/issues/2',
+                       labels=[{'name':'💎 Bounty'},{'name':'💰 Rewarded'}],
+                       created_at='1970-01-01T00:20:00Z')
+  r=self.run_probe(self.gh_response([existing,awarded]),1601,[src])
+  self.assertEqual(r['meaningful_events'],0)
+  self.assertEqual(r['first_observed_unverified_events'],1)
+  event=self.events()[-1][1]
+  self.assertEqual(event['kind'],'FIRST_OBSERVED_UNVERIFIED')
+  self.assertFalse(event['evidence']['fresh_creation_after_baseline'])
+  self.assertFalse(event['dispatch_allowed'])
+  reopened=dict(awarded,labels=[{'name':'💎 Bounty'}])
+  later=self.run_probe(self.gh_response([existing,reopened]),2202,[src])
+  self.assertEqual(later['meaningful_events'],1)
+  self.assertEqual(self.events()[-1][1]['kind'],'VALIDATION_REQUIRED')
+  self.assertEqual(self.events()[-1][1]['diff']['funding_labels'],
+                   {'before':['💎 bounty','💰 rewarded'],'after':['💎 bounty']})
+
 if __name__=='__main__': unittest.main()

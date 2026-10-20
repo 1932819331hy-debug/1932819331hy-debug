@@ -158,7 +158,16 @@ def fresh_candidate(source,snapshot,cached,start):
                 and snapshot['amount_minor']>0 and isinstance(snapshot.get('currency'),str)
                 and bool(snapshot['currency'].strip())
                 and (snapshot.get('internal') is False or snapshot.get('internal') is None))
-    return snapshot.get('state')=='open' and bool(snapshot.get('funding_labels'))
+    # A bounty-like GitHub label is only a triage hint, never proof of funds.
+    # Explicit paid/rewarded/unfunded labels should not promote a *newly seen*
+    # issue into the limited fresh-funding validation queue. Keep the item in
+    # the observation cache: any later meaningful label/state change is still
+    # recorded by the regular transition path.
+    labels=snapshot.get('funding_labels') or []
+    if snapshot.get('state')!='open' or not labels:
+        return False
+    terminal=r'\b(?:rewarded|paid|unfunded|unpaid)\b|\bnot[\s_-]+funded\b'
+    return not any(re.search(terminal,label,re.I) for label in labels)
 
 def run(db,manifest,trigger,now=None,transport=fetch):
     start=time.time() if now is None else now

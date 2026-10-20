@@ -1,0 +1,18 @@
+name: Metadata probe PR regressions
+on:
+  pull_request:
+    paths:
+      - '.github/metadata-probe/**'
+      - '.github/workflows/metadata-probe-pr-tests.yml'
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Offline probe unit tests
+        run: python3 -m unittest discover -s .github/metadata-probe -p 'test_*.py' -v
