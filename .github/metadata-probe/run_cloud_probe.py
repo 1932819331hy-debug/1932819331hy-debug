@@ -8,6 +8,7 @@ from pathlib import Path
 
 import review_metadata
 import healthcheck
+import health_incident
 
 ROOT = Path(__file__).resolve().parent
 
@@ -70,6 +71,11 @@ def main():
     # A failed health signal never prevents mechanical source detection.
     health = healthcheck.run(state)
     print("CLOUD_HEALTH_CHECK=" + json.dumps(health, sort_keys=True), flush=True)
+    incidents = health_incident.run(state, health, {
+        "run_id": os.getenv("GITHUB_RUN_ID"), "attempt": os.getenv("GITHUB_RUN_ATTEMPT"),
+        "head_sha": os.getenv("GITHUB_SHA"), "event": os.getenv("GITHUB_EVENT_NAME"),
+    })
+    print("HEALTH_INCIDENT_RECEIPT=" + json.dumps(incidents, sort_keys=True), flush=True)
     receipt = probe.run(state / "cache.db", manifest,
                         os.getenv("GITHUB_EVENT_NAME", "manual-cloud-verification"))
     receipt.update(
@@ -100,7 +106,8 @@ def main():
     temporary.replace(state / "events.jsonl")
     reviews = review_metadata.run(state)
     output = {"receipt": receipt, "derived_events": events, "event_coverage": coverage,
-              "reviews": reviews, "health": health, "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
+              "reviews": reviews, "health": health, "health_incidents": incidents,
+              "cache_role": "DERIVED_NO_DISPATCH_AUTHORITY"}
     save_json(state / "latest.json", output)
     # Keep raw log lines usable by connectors. Full evidence is also an Actions artifact.
     review_summary = {k: v for k, v in reviews.items() if k not in ("current", "fingerprints")}
@@ -114,7 +121,7 @@ def main():
                                          "total": len(candidates),
                                          "truncated": len(candidates) > 20}
     print("PUBLIC_METADATA_RECEIPT=" + json.dumps(log_output, sort_keys=True), flush=True)
-    if (health["status"] != "HEALTHY" or receipt["result"] == "PARTIAL"
+    if (health["status"] != "HEALTHY" or incidents["status"] != "OK" or receipt["result"] == "PARTIAL"
             or reviews["status"] in ("ERROR", "PARTIAL")):
         return 1
     return 0

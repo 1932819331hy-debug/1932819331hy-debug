@@ -47,6 +47,7 @@ jobs:
             .probe-state/events.jsonl
             .probe-state/reviews*.json
             .probe-state/health.json
+            .probe-state/health_incidents.json
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7

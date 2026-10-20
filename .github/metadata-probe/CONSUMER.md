@@ -145,6 +145,39 @@ model API, invented wake-up endpoint or long-running sleep loop is installed.
 
 ## Coverage and failures
 
+`HEALTH_INCIDENT_RECEIPT` and `health_incidents.json` are a bounded derived
+handoff for the **existing** hourly controller. One overdue heartbeat receipt
+anchor produces one stable incident ID and `:OPENED` event; repeated stale
+observations retain that event unchanged and still fail the probe job. A later
+verified HEALTHY result appends one `:RECOVERED` event. ERROR does not close an
+episode. Older observations cannot reopen it; cache corruption or 16-episode
+capacity fails visibly without erasing history. Reconcile the canonical Page
+before any cache reset. Cache loss may re-emit an event; Page dedupe is decisive.
+
+The original writer must inspect the actual GitHub repository/run/attempt/head,
+event and artifact/log chain, then materialize the snapshot as data. Run
+`health_incident.py --snapshot health_incidents.json --context context.json`.
+The context is a fresh Page-derived `snapshot_sha256` and `accepted_events` map
+from event ID to semantic identity digest (event ID plus overdue success time).
+The snapshot byte digest and actual source chain are checked separately.
+`PENDING_CANONICAL_PAGE_SAVE` returns
+only proposed acknowledgements. Conditionally merge new events/digests and source
+evidence into the same Page incident object, then read back before recording
+`CONTROLLER_CONSUMED`. Re-run with that fresh map: `ALREADY_CONSUMED_NO_ACTION`
+means no further action. Conflicting semantic identity is rejected. After cache
+eviction a later first observation may carry different run/time evidence; retain
+the Page's first evidence and consume no duplicate action.
+Map the public incident ID to the original controller/overdue-anchor private
+incident key, preserving existing historical evidence. Do not mark a different
+current episode recovered from an older event. Explicit private historical replay
+must retain its replay label and cannot refresh the natural heartbeat.
+
+The probe never claims artifact upload, Page consumption or human acknowledgement.
+Read-back of an actual artifact proves platform persistence; actual Page save and
+readback proves the original controller consumed the event. Neither proves GitHub
+account notification creation, email/mobile delivery or human read. Keep these
+separate; no automatic human acknowledgement or new notification channel exists.
+
 The cron is a ten-minute target, not a platform delivery guarantee. Measure
 actual schedule runs and source read times. New-source research remains a
 bounded attempt at most every two hours; full WIP does not stop lightweight
