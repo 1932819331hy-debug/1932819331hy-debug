@@ -1,0 +1,6 @@
+WARNING: Network 'lightning' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'apis' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.
+WARNING: Network 'lightning' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'analytics' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.
+WARNING: Network 'camino' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'apis' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.
+WARNING: Network 'camino' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'analytics' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.
+WARNING: Network 'zilliqa' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'apis' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.
+WARNING: Network 'zilliqa' has no populated 'chain' values. 'all-networks' offers in chain-aware category 'analytics' cannot be applied. Add at least one entry with a non-empty 'chain' value to fix this.

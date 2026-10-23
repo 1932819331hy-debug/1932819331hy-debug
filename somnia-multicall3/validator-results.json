@@ -1,0 +1,44 @@
+{
+  "revision": "67820f9f2a89f3edd28bd8c40319135d19fdb957",
+  "tools_revision": "830d5f05ae15954c43ef23f4085c83d4548d5431",
+  "python": "Python 3.12.14",
+  "snapshot": "upstream source archive at revision",
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "validate_csv.py"
+      ],
+      "cwd": "source archive root",
+      "exit_code": 0,
+      "timed_out": false,
+      "seconds": 0.11,
+      "log": "validate_csv.py.log"
+    },
+    {
+      "command": [
+        "python3",
+        "csv_to_json.py"
+      ],
+      "cwd": "source archive root",
+      "exit_code": 0,
+      "timed_out": false,
+      "seconds": 3.68,
+      "log": "csv_to_json.py.log"
+    },
+    {
+      "command": [
+        "python3",
+        "validate.py"
+      ],
+      "cwd": "source archive root",
+      "exit_code": 0,
+      "timed_out": false,
+      "seconds": 13.65,
+      "log": "validate.py.log"
+    }
+  ],
+  "passed": true,
+  "environment": "Local Python 3.12 with bundled wheels; not the CI Docker container",
+  "path_normalization": "Only machine-specific paths were replaced; revisions, exit codes, timings and results are unchanged."
+}

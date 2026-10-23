@@ -1,0 +1,25 @@
+From 67820f9f2a89f3edd28bd8c40319135d19fdb957 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E5=BA=A6=20=E5=AF=BB?=
+ <jq2zjhmw77@privaterelay.appleid.com>
+Date: Fri, 23 Oct 2026 14:39:36 +0000
+Subject: [PATCH] data(somnia): document Multicall3 service deployments
+
+---
+ listings/specific-networks/somnia/services.csv | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/listings/specific-networks/somnia/services.csv b/listings/specific-networks/somnia/services.csv
+index 6d6b12b..4f562bb 100644
+--- a/listings/specific-networks/somnia/services.csv
++++ b/listings/specific-networks/somnia/services.csv
+@@ -1,6 +1,7 @@
+ slug,provider,offer,actionButtons,toolType,tag,price,planName,planType,description,starred
+ agent-kit,,!offer:agent-kit,,,,,,,,
+ chain-ide,,!offer:chain-ide,,,,,,,,
++multicall3,,!offer:multicall3,"[""[Docs](https://docs.somnia.network/developer/network-info)"",""[Website](https://www.multicall3.com)""]",,,,,,Multicall3 contract-call aggregation on Somnia mainnet (0x5e44F178E8cF9B2F5409B6f18ce936aB817C5a11) and Shannon testnet (0x841b8199E6d3Db3C6f264f6C2bd8848b3cA64223).,
+ pimlico-account-abstraction,,!offer:pimlico-account-abstraction,"[""[Docs](https://docs.somnia.network/developer/deployment-and-production/ecosystem/ecosystem-tools)""]",,,,,,,
+ reown-free,,!offer:reown-free,,,,,,,,
+ reown-pro,,!offer:reown-pro,,,,,,,,
+-- 
+2.52.0
+

@@ -1,0 +1,11 @@
+{
+  "tested_sha": "67820f9f2a89f3edd28bd8c40319135d19fdb957",
+  "base_sha": "7900812d45993a3eac5055c231b690dc26920b89",
+  "network_files_compared": 138,
+  "changed_network_files": [
+    "somnia.json"
+  ],
+  "only_expected_service_and_provider_added": true,
+  "resolved_record_matches_independent_review": true,
+  "all_validators_passed": true
+}

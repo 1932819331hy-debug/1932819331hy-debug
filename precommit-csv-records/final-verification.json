@@ -1,0 +1,14 @@
+{
+  "tested_sha": "61183af412d1edd0e4f657c68a02e316272d9fad",
+  "base_sha": "7900812d45993a3eac5055c231b690dc26920b89",
+  "regressions_passed": 12,
+  "regressions_failed": 0,
+  "existing_csv_files_checked": 959,
+  "existing_csv_bytes_changed": 0,
+  "idempotent_worktree_and_index": true,
+  "independent_boundary_cases_passed": 1458,
+  "reviewed_source_bytes_unchanged_after_rebase": true,
+  "test_log": "rebased-head-tests.log",
+  "compatibility_log": "rebased-data-compatibility.log",
+  "worktree_clean": true
+}

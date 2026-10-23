@@ -1,0 +1,15 @@
+COMMAND: ['<verification-workspace>/three-new-prs/toolchain/node_modules/.bin/bun', 'run', 'build']
+$ tsup index.ts --format esm --dts --sourcemap
+CLI Building entry: index.ts
+CLI Using tsconfig: tsconfig.json
+CLI tsup v8.0.2
+CLI Target: esnext
+ESM Build start
+ESM dist/index.js     1014.00 B
+ESM dist/index.js.map 1.92 KB
+ESM ⚡️ Build success in 24ms
+DTS Build start
+DTS ⚡️ Build success in 479ms
+DTS dist/index.d.ts 205.00 B
+
+EXIT: 0

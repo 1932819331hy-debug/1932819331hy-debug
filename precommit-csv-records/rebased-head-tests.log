@@ -1,0 +1,64 @@
+COMMAND: ['python3', '-B', '-m', 'unittest', 'discover', '-s', 'git-hooks/tests', '-v']
+test_crlf_records_and_embedded_newlines_are_preserved (test_csv_sorting.CsvSortingTests.test_crlf_records_and_embedded_newlines_are_preserved) ... ok
+test_custom_delimiter (test_csv_sorting.CsvSortingTests.test_custom_delimiter) ... ok
+test_empty_header_only_and_no_slug_files_are_unchanged (test_csv_sorting.CsvSortingTests.test_empty_header_only_and_no_slug_files_are_unchanged) ... ok
+test_empty_record_does_not_coalesce_with_cr_header_ending (test_csv_sorting.CsvSortingTests.test_empty_record_does_not_coalesce_with_cr_header_ending) ... ok
+test_escaped_quotes_and_unicode_are_preserved (test_csv_sorting.CsvSortingTests.test_escaped_quotes_and_unicode_are_preserved) ... ok
+test_header_and_record_newline_styles_are_preserved (test_csv_sorting.CsvSortingTests.test_header_and_record_newline_styles_are_preserved) ... ok
+test_multiline_fields_remain_one_record (test_csv_sorting.CsvSortingTests.test_multiline_fields_remain_one_record) ... ok
+test_no_terminal_newline_when_last_record_moves_first (test_csv_sorting.CsvSortingTests.test_no_terminal_newline_when_last_record_moves_first) ... ok
+test_quoted_delimiter_before_slug (test_csv_sorting.CsvSortingTests.test_quoted_delimiter_before_slug) ... ok
+test_reordered_empty_records_do_not_coalesce_cr_and_lf (test_csv_sorting.CsvSortingTests.test_reordered_empty_records_do_not_coalesce_cr_and_lf) ... ok
+test_single_line_and_equal_keys_keep_original_quoting_and_order (test_csv_sorting.CsvSortingTests.test_single_line_and_equal_keys_keep_original_quoting_and_order) ... ok
+test_unterminated_quote_does_not_write_or_stage (test_csv_sorting.CsvSortingTests.test_unterminated_quote_does_not_write_or_stage) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.179s
+
+OK
+Sorting CSV files by slug
+  sorted: /tmp/tmp8rsau4zf/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmp8rsau4zf/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmph5teofjw/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmph5teofjw/records.csv
+Sorting CSV files by slug
+Sorting CSV files by slug
+Sorting CSV files by slug
+Sorting CSV files by slug
+  sorted: /tmp/tmp9r1telul/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmp9r1telul/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpzuhq09c_/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpzuhq09c_/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpfs217l11/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpfs217l11/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpu_tw21p7/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpu_tw21p7/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpirma1qhk/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpirma1qhk/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpywu53vdj/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpywu53vdj/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpz5ffe0ce/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmpz5ffe0ce/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmp0dps55y7/records.csv
+Sorting CSV files by slug
+  sorted: /tmp/tmp0dps55y7/records.csv
+Sorting CSV files by slug
+
+EXIT: 0

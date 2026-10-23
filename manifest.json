@@ -1,0 +1,51 @@
+{
+  "account": "1932819331hy-debug",
+  "prepared_changes": 3,
+  "upstream_prs_created_in_this_batch": 0,
+  "confirmed_awards": 0,
+  "status_as_of_utc": "2026-10-23T23:22:35Z",
+  "changes": [
+    {
+      "name": "Preserve logical CSV records during pre-commit sorting",
+      "repository": "Chain-Love/chain-love",
+      "branch": "fix/precommit-csv-records",
+      "head": "61183af412d1edd0e4f657c68a02e316272d9fad",
+      "base": "7900812d45993a3eac5055c231b690dc26920b89",
+      "directory": "precommit-csv-records",
+      "checks": "12 regression tests; 959 CSV files unchanged and idempotent; 1458 independent boundary cases",
+      "reward": "not established",
+      "upstream_pr": null,
+      "upstream_ci": "not run",
+      "remote_push_verified": true,
+      "planned_draft": false
+    },
+    {
+      "name": "Add documented Somnia Multicall3 service listing",
+      "repository": "Chain-Love/chain-love",
+      "branch": "data/somnia-multicall3",
+      "head": "67820f9f2a89f3edd28bd8c40319135d19fdb957",
+      "base": "7900812d45993a3eac5055c231b690dc26920b89",
+      "directory": "somnia-multicall3",
+      "checks": "3 pinned upstream validators; comparison of all138 network JSON files, only expected Somnia changes",
+      "reward": "conditional data grant, unapproved, no payment",
+      "upstream_pr": null,
+      "upstream_ci": "not run",
+      "remote_push_verified": true,
+      "planned_draft": true
+    },
+    {
+      "name": "Interpret signed decimal mil strings consistently",
+      "repository": "tscircuit/mm",
+      "branch": "fix/mil2mm-decimal-strings",
+      "head": "fa997a5cdfabd854c4007e80a14a2869a7d0152c",
+      "base": "10ca85f3b39f993d88c2be35c2cc4ed814a2cd43",
+      "directory": "mm-mil2mm-decimal",
+      "checks": "28 tests, typecheck, format, build; 108 independent decimal and53 baseline compatibility cases",
+      "reward": "not established",
+      "upstream_pr": null,
+      "upstream_ci": "not run",
+      "remote_push_verified": false,
+      "planned_draft": false
+    }
+  ]
+}

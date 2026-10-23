@@ -1,0 +1,11 @@
+{
+  "initial_reviewed_sha": "5e6c4c539ab99686939e0f5b7923ad1a0171ee9b",
+  "final_sha": "61183af412d1edd0e4f657c68a02e316272d9fad",
+  "base_sha": "7900812d45993a3eac5055c231b690dc26920b89",
+  "reviewed_changed_file_bytes_unchanged": true,
+  "worktree_clean": true,
+  "files": [
+    "git-hooks/pre-commit.py",
+    "git-hooks/tests/test_csv_sorting.py"
+  ]
+}

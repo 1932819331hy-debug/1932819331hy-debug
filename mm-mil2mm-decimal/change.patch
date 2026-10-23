@@ -1,0 +1,96 @@
+From fa997a5cdfabd854c4007e80a14a2869a7d0152c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E5=BA=A6=20=E5=AF=BB?=
+ <jq2zjhmw77@privaterelay.appleid.com>
+Date: Fri, 23 Oct 2026 22:54:10 +0000
+Subject: [PATCH] fix: interpret signed decimal mil strings consistently
+
+---
+ README.md            | 12 ++++++++++++
+ index.ts             |  4 +++-
+ tests/mil2mm.test.ts | 39 +++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 54 insertions(+), 1 deletion(-)
+ create mode 100644 tests/mil2mm.test.ts
+
+diff --git a/README.md b/README.md
+index a8a63ac..47605df 100644
+--- a/README.md
++++ b/README.md
+@@ -22,3 +22,15 @@ import { mmStr } from "@tscircuit/mm"
+ mmStr(10) // 10mm
+ mmStr("0.1in") // 2.54mm
+ ```
++
++`mil2mm` treats numbers and unitless decimal strings as mils (one thousandth
++of an inch). Strings with an explicit unit use that unit instead.
++
++```ts
++import { mil2mm } from "@tscircuit/mm"
++
++mil2mm(10) // 0.254
++mil2mm("10.0") // 0.254
++mil2mm("-0.5") // -0.0127
++mil2mm("10mm") // 10
++```
+diff --git a/index.ts b/index.ts
+index c6270de..62532ac 100644
+--- a/index.ts
++++ b/index.ts
+@@ -33,7 +33,9 @@ export const mmStr = (n: number | string): string => {
+ 
+ export const mil2mm = (mil: number | string) => {
+   if (typeof mil === "number") return mm(`${mil}mil`)
+-  if (mil.match(/^\d+$/)) return mm(`${mil}mil`)
++  if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(mil.trim())) {
++    return mm(`${mil.trim()}mil`)
++  }
+   return mm(mil)
+ }
+ 
+diff --git a/tests/mil2mm.test.ts b/tests/mil2mm.test.ts
+new file mode 100644
+index 0000000..764a6f5
+--- /dev/null
++++ b/tests/mil2mm.test.ts
+@@ -0,0 +1,39 @@
++import { expect, test } from "bun:test"
++import { mil2mm } from "../index.ts"
++
++test.each([
++  ["10.0", 10],
++  ["0.5", 0.5],
++  [".5", 0.5],
++  ["10.", 10],
++  ["-10", -10],
++  ["+10", 10],
++  ["-0.5", -0.5],
++  ["+.5", 0.5],
++  [" 10 ", 10],
++  ["\t-0.5\n", -0.5],
++] as const)("unitless decimal %s is measured in mils", (input, value) => {
++  const expected = value * 0.0254
++  expect(mil2mm(input)).toBeCloseTo(expected, 12)
++  expect(mil2mm(value)).toBeCloseTo(expected, 12)
++})
++
++test.each([
++  ["10", 0.254],
++  ["0", 0],
++  ["10mil", 0.254],
++  ["-0.5mil", -0.0127],
++  ["10mm", 10],
++  ["1cm", 10],
++  ["1in", 25.4],
++  ["1feet", 304.8],
++] as const)("preserves conversion of %s", (input, expected) => {
++  expect(mil2mm(input)).toBeCloseTo(expected, 12)
++})
++
++test.each(["10kg", "10.5unknown", "invalid"])(
++  "rejects unsupported unit %s",
++  (input) => {
++    expect(() => mil2mm(input)).toThrow("Unsupported unit:")
++  },
++)
+-- 
+2.52.0
+

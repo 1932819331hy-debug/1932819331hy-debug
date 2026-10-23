@@ -1,0 +1,5 @@
+COMMAND: ['<verification-workspace>/three-new-prs/toolchain/node_modules/.bin/bun', 'run', 'format:check']
+$ biome format .
+Checked 5 files in 1833µs. No fixes applied.
+
+EXIT: 0

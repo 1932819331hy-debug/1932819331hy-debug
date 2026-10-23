@@ -1,0 +1,10 @@
+{
+  "initial_reviewed_sha": "8942e3181834c5759d1cbaaf35f8fced4173700e",
+  "final_sha": "67820f9f2a89f3edd28bd8c40319135d19fdb957",
+  "base_sha": "7900812d45993a3eac5055c231b690dc26920b89",
+  "reviewed_changed_file_bytes_unchanged": true,
+  "worktree_clean": true,
+  "files": [
+    "listings/specific-networks/somnia/services.csv"
+  ]
+}

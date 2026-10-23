@@ -1,0 +1,42 @@
+COMMAND: ['<verification-workspace>/three-new-prs/toolchain/node_modules/.bin/bun', 'test']
+bun test v1.4.4 (38afee6c8)
+
+tests/basic.test.ts:
+(pass) 1in [0.16ms]
+(pass) 10mm [0.01ms]
+(pass) 0.54mm [0.02ms]
+(pass) 0.8mm
+(pass) 100mil
+(pass) mmStr avoids scientific notation [0.30ms]
+(pass) mmStr formats converted units without scientific notation [0.04ms]
+
+tests/mil2mm.test.ts:
+(pass) unitless decimal 10.0 is measured in mils [0.11ms]
+(pass) unitless decimal 0.5 is measured in mils [0.03ms]
+(pass) unitless decimal .5 is measured in mils
+(pass) unitless decimal 10. is measured in mils
+(pass) unitless decimal -10 is measured in mils
+(pass) unitless decimal +10 is measured in mils
+(pass) unitless decimal -0.5 is measured in mils
+(pass) unitless decimal +.5 is measured in mils
+(pass) unitless decimal  10  is measured in mils
+(pass) unitless decimal 	-0.5
+ is measured in mils
+(pass) preserves conversion of 10 [0.01ms]
+(pass) preserves conversion of 0
+(pass) preserves conversion of 10mil
+(pass) preserves conversion of -0.5mil
+(pass) preserves conversion of 10mm
+(pass) preserves conversion of 1cm
+(pass) preserves conversion of 1in [0.06ms]
+(pass) preserves conversion of 1feet
+(pass) rejects unsupported unit 10kg [0.07ms]
+(pass) rejects unsupported unit 10.5unknown [0.01ms]
+(pass) rejects unsupported unit invalid
+
+ 28 pass
+ 0 fail
+ 38 expect() calls
+Ran 28 tests across 2 files. [5.00ms]
+
+EXIT: 0

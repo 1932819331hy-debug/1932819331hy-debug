@@ -1,0 +1,19 @@
+{
+  "tested_sha": "fa997a5cdfabd854c4007e80a14a2869a7d0152c",
+  "base_sha": "10ca85f3b39f993d88c2be35c2cc4ed814a2cd43",
+  "independent_review_source_identity_confirmed": true,
+  "tests": {
+    "passed": 28,
+    "failed": 0,
+    "log": "final-head-tests.log"
+  },
+  "typecheck_exit_code": 0,
+  "format_exit_code": 0,
+  "build_exit_code": 0,
+  "review_decimal_cases": 108,
+  "review_compatibility_cases": 53,
+  "bun_version": "1.4.4",
+  "frozen_dependencies_installed": true,
+  "lockfiles_unchanged": true,
+  "worktree_clean": true
+}
