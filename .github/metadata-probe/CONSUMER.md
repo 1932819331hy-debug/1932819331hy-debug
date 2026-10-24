@@ -299,7 +299,10 @@ work and never authorizes duplicating an external owner's task.
 Outputs include `actual_started`, `upstream_submitted`, `blocked`, and
 `required_next`. Missing due engineering without a WORK blocker returns REJECTED
 and exit 2. `IN_PROGRESS` can validly record real partial work; `BLOCKED` needs a
-concrete blocker. `COMPLETED` claims upstream delivery with passing exact-head
+concrete blocker on an eligible CURRENT ticket whose corresponding step remains
+unfinished: WORK before PASS, or PUBLICATION before upstream delivery. Historical
+blockers remain in `blocked` but cannot alone justify the current blocked outcome.
+`COMPLETED` claims upstream delivery with passing exact-head
 checks for every selected eligible current-owner ticket and otherwise returns
 REJECTED/exit 2. A valid blocked receipt preserves the blocker and next step;
 exit 0 does not mean delivered. Malformed input also exits 2. Focused tests in

@@ -87,6 +87,129 @@ class RoundReceiptTests(unittest.TestCase):
             receipt['tickets'][0]['work'] = {'kind': 'NONE', 'evidence': 'Existing owner retained'}
             self.assertEqual(self.validate(context, receipt)['actual_started'], [])
 
+    def test_passed_work_blocker_cannot_justify_a_blocked_round(self):
+        for publication in (None,
+                {'kind': 'UPSTREAM_PR', 'repo': 'org/repo',
+                 'url': 'https://github.com/org/repo/pull/2', 'head_sha': SHA},
+                {'kind': 'FORK_VALIDATION_PR', 'repo': 'me/repo',
+                 'url': 'https://github.com/me/repo/pull/2', 'head_sha': SHA}):
+            with self.subTest(publication=publication):
+                context, receipt = fixture()
+                receipt['outcome'] = 'BLOCKED'
+                ticket = receipt['tickets'][0]
+                ticket['publication'] = publication
+                ticket['blockers'] = [{'step': 'WORK', 'tool': 'worker launch',
+                    'error': 'historical failure', 'evidence': 'Page Files: old-work.log'}]
+                with self.assertRaisesRegex(ValueError, '^BLOCKED_WITHOUT_BLOCKER$'):
+                    self.validate(context, receipt)
+
+    def test_inactive_blocker_cannot_block_a_round(self):
+        for field, value in (('eligible', False), ('owner_state', 'EXTERNAL')):
+            for step in ('WORK', 'PUBLICATION'):
+                with self.subTest(field=field, step=step):
+                    context, receipt = fixture()
+                    context['tickets'][0][field] = value
+                    ticket = receipt['tickets'][0]
+                    ticket['work'] = {'kind': 'READ', 'evidence': 'Retained historical status'}
+                    ticket['blockers'] = [{'step': step, 'tool': 'historical tool',
+                        'error': 'historical failure', 'evidence': 'Page Files: old.log'}]
+                    receipt['outcome'] = 'BLOCKED'
+                    with self.assertRaisesRegex(ValueError, '^BLOCKED_WITHOUT_BLOCKER$'):
+                        self.validate(context, receipt)
+                    # A completed active ticket cannot make the inactive blocker current.
+                    current_context, current_receipt = fixture()
+                    current_context['tickets'][0]['task_id'] = 'org/repo#2'
+                    current = current_receipt['tickets'][0]
+                    current['task_id'] = 'org/repo#2'
+                    current['publication'] = {'kind': 'UPSTREAM_PR', 'repo': 'org/repo',
+                        'url': 'https://github.com/org/repo/pull/2', 'head_sha': SHA}
+                    context['tickets'].extend(current_context['tickets'])
+                    receipt['tickets'].append(current)
+                    with self.assertRaisesRegex(ValueError, '^BLOCKED_WITHOUT_BLOCKER$'):
+                        self.validate(context, receipt)
+
+    def test_current_unfinished_steps_can_block_without_erasing_history(self):
+        cases = [('NONE', ['WORK'], 'WORK'), ('FAIL', ['WORK'], 'WORK'),
+                 ('IN_PROGRESS', ['WORK'], 'WORK'), ('PASS', ['PUBLICATION'], 'PUBLICATION'),
+                 ('IN_PROGRESS', ['PUBLICATION'], 'WORK'),
+                 ('IN_PROGRESS', ['WORK', 'PUBLICATION'], 'WORK'),
+                 ('PASS', ['WORK', 'PUBLICATION'], 'PUBLICATION')]
+        for work_result, steps, next_step in cases:
+            with self.subTest(work_result=work_result, steps=steps):
+                context, receipt = fixture()
+                receipt['outcome'] = 'BLOCKED'
+                ticket = receipt['tickets'][0]
+                if work_result == 'NONE':
+                    ticket['work'] = {'kind': 'NONE', 'evidence': 'Worker entrance unavailable'}
+                else:
+                    ticket['work']['result'] = work_result
+                    ticket['work']['checks'][0]['exit_code'] = 1 if work_result == 'FAIL' else 0
+                ticket['blockers'] = [{'step': step, 'tool': 'attempted tool',
+                    'error': 'actual tool error', 'evidence': 'Page Files: failure.log'} for step in steps]
+                original = copy.deepcopy(receipt)
+                result = self.validate(context, receipt)
+                self.assertEqual(result['status'], 'VALIDATED')
+                self.assertEqual(result['required_next'][0]['step'], next_step)
+                self.assertEqual(result['blocked'], [
+                    {'task_id': 'org/repo#1', **block} for block in original['tickets'][0]['blockers']])
+                self.assertEqual(receipt, original)
+                self.assertFalse(result['execution_attested'])
+                self.assertFalse(result['dispatch_authorized'])
+                self.assertEqual(result['public_mutations'], 0)
+
+    def test_blocked_mixed_round_preserves_completed_and_inactive_evidence(self):
+        context, receipt = fixture()
+        receipt['outcome'] = 'BLOCKED'
+        ticket = receipt['tickets'][0]
+        ticket['publication'] = {'kind': 'FORK_VALIDATION_PR', 'repo': 'me/repo',
+            'url': 'https://github.com/me/repo/pull/2', 'head_sha': SHA}
+        ticket['blockers'] = [{'step': 'PUBLICATION', 'tool': 'gh pr create',
+            'error': 'HTTP 403', 'evidence': 'Page Files: publication.log'}]
+        completed = copy.deepcopy(ticket)
+        completed['task_id'] = 'org/repo#2'
+        completed['publication'].update(kind='UPSTREAM_PR', repo='org/repo',
+                                       url='https://github.com/org/repo/pull/3')
+        completed['blockers'][0].update(step='WORK', evidence='Page Files: old-work.log')
+        inactive = {'task_id': 'org/repo#3', 'work': {'kind': 'READ', 'evidence': 'External status'},
+                    'publication': None, 'blockers': copy.deepcopy(completed['blockers'])}
+        for report, owner in ((completed, 'CURRENT'), (inactive, 'EXTERNAL')):
+            context['tickets'].append({'task_id': report['task_id'], 'repo': 'org/repo',
+                                       'eligible': True, 'owner_state': owner})
+            receipt['tickets'].append(report)
+        result = self.validate(context, receipt)
+        self.assertEqual(result['status'], 'VALIDATED')
+        self.assertEqual(result['actual_started'], ['org/repo#1', 'org/repo#2'])
+        self.assertEqual(result['upstream_submitted'], ['org/repo#2'])
+        self.assertEqual(result['required_next'], [
+            {'task_id': 'org/repo#1', 'step': 'PUBLICATION', 'reason': 'RESOLVE_BLOCKER'}])
+        self.assertEqual(result['blocked'], [
+            {'task_id': report['task_id'], **block}
+            for report in receipt['tickets'] for block in report['blockers']])
+
+    def test_cli_rejects_stale_work_blocker_without_execution(self):
+        context, receipt = fixture()
+        receipt['outcome'] = 'BLOCKED'
+        ticket = receipt['tickets'][0]
+        ticket['blockers'] = [{'step': 'WORK', 'tool': 'old worker launch',
+            'error': 'old failure', 'evidence': 'Page Files: old.log'}]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / 'MUST_NOT_EXIST'
+            work = ticket['work']
+            work.update(kind='COMMAND', argv=[sys.executable, '-c',
+                f'open({str(marker)!r}, "w").write("bad")'])
+            del work['paths']
+            work['checks'][0]['argv'] = work['argv']
+            for name, value in (('context', context), ('receipt', receipt)):
+                (root / (name + '.json')).write_text(json.dumps(value))
+            result = subprocess.run([sys.executable, str(MODULE), '--context', str(root / 'context.json'),
+                '--receipt', str(root / 'receipt.json')], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertEqual(json.loads(result.stderr),
+                             {'status': 'REJECTED', 'reason': 'BLOCKED_WITHOUT_BLOCKER'})
+            self.assertEqual(result.stdout, '')
+            self.assertFalse(marker.exists())
+
     def test_fork_validation_is_never_upstream_submission(self):
         context, receipt = fixture()
         ticket = receipt['tickets'][0]
