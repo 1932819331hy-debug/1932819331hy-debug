@@ -102,6 +102,7 @@ def verify_round(raw, context, *, cash_only=False):
         require(text(task_id, 256) and task_id in tickets and task_id not in reports, 'RESULT_TASK_ID')
         reports[task_id] = report
     started, submitted, blocked, required, errors = [], [], [], [], []
+    has_active_blocker = False
     for task_id, ticket in tickets.items():
         active = ticket['eligible'] and ticket['owner_state'] == 'CURRENT'
         report = reports.get(task_id)
@@ -134,6 +135,11 @@ def verify_round(raw, context, *, cash_only=False):
             require(not upstream or 'PUBLICATION' not in blocks, 'SUBMITTED_AND_BLOCKED_PUBLICATION')
         if not active:
             continue
+        # Keep every reported blocker as evidence, but only unfinished active
+        # steps can justify the current round's BLOCKED outcome.
+        if (('WORK' in blocks and report['work'].get('result') != 'PASS')
+                or ('PUBLICATION' in blocks and not upstream)):
+            has_active_blocker = True
         if actual:
             started.append(task_id)
         if upstream:
@@ -152,7 +158,7 @@ def verify_round(raw, context, *, cash_only=False):
         if receipt['outcome'] == 'COMPLETED':
             if not upstream or report['work'].get('result') != 'PASS' or blocks:
                 errors.append('FALSELY_COMPLETE')
-    require(receipt['outcome'] != 'BLOCKED' or blocked, 'BLOCKED_WITHOUT_BLOCKER')
+    require(receipt['outcome'] != 'BLOCKED' or has_active_blocker, 'BLOCKED_WITHOUT_BLOCKER')
     return {'status': 'REJECTED' if errors else 'VALIDATED', 'round_id': context['round_id'],
             'actual_started': started, 'upstream_submitted': submitted, 'blocked': blocked,
             'required_next': required, 'errors': sorted(set(errors)),
